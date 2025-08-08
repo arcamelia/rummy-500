@@ -16,6 +16,13 @@ class Player:
         # 2. play any cards from hand
         # 3. discard a card from hand
         return
+    
+    """
+    Return true if this player can pick up a card from either the discard or pickup piles.
+    """
+    def can_pick_up(self) -> bool:
+        # todo
+        return False
 
     """
     Play given cards from hand. This will remove them from this player's hand and 
@@ -35,19 +42,19 @@ class Player:
     Add given card to this player's hand in sorted order.
     """
     def add_to_hand(self, card: Card) -> None:
-        card.set_status_and_player(CardStatus.HAND, self.__id)
+        card.update(CardStatus.HAND, self.__id)
         self.__hand.append(card)
         self.sort_hand()
     
     """
-    Remove given card from this player's hand and mark it as in either DISCARD_PILE 
+    Remove given card from this player's hand and mark it as in either PILE_DISCARD 
     or TABLE status.
     """
     def rmv_from_hand(self, card: Card, next_status: CardStatus) -> None:
-        if next_status not in (CardStatus.DISCARD_PILE, CardStatus.TABLE):
+        if next_status not in (CardStatus.PILE_DISCARD, CardStatus.TABLE):
             # todo: throw error
             print("A card cannot change from a hand to pickup pile or hand")
-        card.set_status_and_player(next_status, None)
+        card.update(next_status, None)
         self.__hand.remove(card)  # idk if __eq__ needs to be overriden in Card
     
     """

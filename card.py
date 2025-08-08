@@ -20,9 +20,9 @@ class Card:
             # todo: throw an error
             print("player cannot be None when status is HAND or TABLE")
 
-        if player is not None and (status == CardStatus.PICKUP_PILE or status == CardStatus.DISCARD_PILE):
+        if player is not None and (status == CardStatus.PILE_PICKUP or status == CardStatus.PILE_DISCARD):
             # todo: throw an error
-            print("player must be None when status is PICKUP_PILE or DISCARD_PILE")
+            print("player must be None when status is PILE_PICKUP or PILE_DISCARD")
 
     """
     Change the current card status to a new status, if it is allowed.
@@ -37,10 +37,10 @@ class Card:
     """
     todo: docstring
     """
-    def set_status_and_player(self, new_status: 'CardStatus', new_pid: int = None) -> None:
+    def update(self, new_status: 'CardStatus', new_pid: int = None) -> None:
         self.__status = new_status
 
-        if new_status == CardStatus.PICKUP_PILE or new_status == CardStatus.DISCARD_PILE:
+        if new_status == CardStatus.PILE_PICKUP or new_status == CardStatus.PILE_DISCARD:
             self.__player = None
 
         elif new_pid == None:
@@ -72,6 +72,28 @@ class Card:
     @staticmethod
     def sort_by_suit_and_rank(cards: list['Card'], ace_high=False) -> list['Card']:
         return sorted(cards, key=lambda card: Card.__sort_key(card, ace_high))
+
+    """
+    Convert a list of cards into a list of those cards' ranks.
+    """
+    @staticmethod
+    def map_to_rank(cards: list['Card']) -> list[int]:
+        return list(map(Card.get_rank_value, cards))
+    
+    """
+    Convert a list of cards into a list of those cards' suits.
+    """
+    @staticmethod
+    def map_to_suit(cards: list['Card']) -> list[int]:
+        return list(map(Card.get_suit_value, cards))
+
+    """
+    Return true if a list of cards contains an ace.
+    """
+    @staticmethod
+    def contains_ace(cards: list['Card']) -> bool:
+        ranks = Card.map_to_rank(cards)
+        return Rank.ACE.value in ranks
 
     def get_suit(self) -> 'Suit':
         return self.__suit
@@ -134,32 +156,32 @@ class CardStatus(Enum):
     There are 4 possible statuses for a card during game play. Every card must 
     be in exactly one of these statuses. They are as follows:
 
-        PICKUP_PILE: in the pile of pickup cards (position important)
-        DISCARD_PILE: in the discard pile (position important)
+        PILE_PICKUP: in the pile of pickup cards (position important)
+        PILE_DISCARD: in the discard pile (position important)
         HAND: in one of the players' hands (player important)
         TABLE: someone has played the card on the table (player important)
 
-    Cards either start in PICKUP_PILE or HAND status. The possible
+    Cards either start in PILE_PICKUP or HAND status. The possible
     moves between statuses are:
 
-        PICKUP_PILE -> HAND, PICKUP_PILE
-        DISCARD_PILE -> HAND, DISCARD_PILE
-        HAND -> DISCARD_PILE, TABLE, HAND
+        PILE_PICKUP -> HAND, PILE_PICKUP
+        PILE_DISCARD -> HAND, PILE_DISCARD
+        HAND -> PILE_DISCARD, TABLE, HAND
         TABLE -> TABLE
     """
-    PICKUP_PILE = 1
-    DISCARD_PILE = 2
+    PILE_PICKUP = 1
+    PILE_DISCARD = 2
     HAND = 3
     TABLE = 4
 
     @staticmethod
     def is_allowed_status_move(stat_1: 'CardStatus', stat_2: 'CardStatus') -> bool:
-        if stat_1 == CardStatus.PICKUP_PILE:
-            return stat_2 == (CardStatus.HAND or CardStatus.PICKUP_PILE)
-        elif stat_1 == CardStatus.DISCARD_PILE:
-            return stat_2 == (CardStatus.HAND or CardStatus.DISCARD_PILE)
+        if stat_1 == CardStatus.PILE_PICKUP:
+            return stat_2 == (CardStatus.HAND or CardStatus.PILE_PICKUP)
+        elif stat_1 == CardStatus.PILE_DISCARD:
+            return stat_2 == (CardStatus.HAND or CardStatus.PILE_DISCARD)
         elif stat_1 == CardStatus.HAND:
-            return stat_2 == (CardStatus.DISCARD_PILE or CardStatus.TABLE or CardStatus.HAND)
+            return stat_2 == (CardStatus.PILE_DISCARD or CardStatus.TABLE or CardStatus.HAND)
         else:
             return stat_2 == CardStatus.TABLE
 

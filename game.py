@@ -25,16 +25,26 @@ class Game:
     """
     Represents a game of Rummy 500.
     """
+    players: set[Player]
+    pile_pickup: list[Card]
+    pile_discard: list[Card]
+    table_cards: dict[str,list[Card]]
 
     def __init__(self, players: set[Player]):
         if len(players) > MAX_PLAYERS:
             # todo: throw error
             print(f"Maximum number of players is {MAX_PLAYERS}")
             return
+        
         self.players: set[Player] = players
-        deck = self.initialize_deck()
-        self.deal_cards(deck)
+        deck: list[Card] = self.initialize_deck()
+        self.deal_cards(deck, players)
+
+        self.pile_discard = self.initialize_pile_discard(deck)
+        self.pile_pickup = self.initialize_pile_pickup(deck)
+        
         self.table: dict[str,list[Card]] = {}
+
 
     """
     e.g. table = {
@@ -43,7 +53,7 @@ class Game:
         RH3: [10H, JH, QH, KH, AH],
         RS4: [8S, 9S, 10S],
         RH5: [6H, 7H, 8H],
-        WJ6: [3D, 3S, 3H]
+        W36: [3D, 3S, 3H]
     }
     key formation:
       * prefix character of R (run) or W (wreck)
@@ -62,49 +72,103 @@ class Game:
 
 
     """
-    Run a game of Rummy 500, then return the players' scores in a dict.
+    Rotate players' turns until it's not possible to continue, then return the game's score.
     """
     def run(self) -> dict[int,int]:
         while True:
             for p in self.players:
+                if not p.can_pick_up():
+                    print("No more cards to pick up")
+                    return self.tally_scores()
                 p.run_turn()
                 if not p.get_hand():
                     print("A player has gotten rid of all their cards")
                     return self.tally_scores()
 
     """
-    Return true if there is a rummy currently on the table.
+    Return true if given list of cards can form a legal play (could be a R or a W).
     """
-    def check_rummy(self) -> bool:
-        """
-        table = {
-            RC1: [3C, 4C, 5C],
-            WA2: [AC, AD, AS],
-            RH3: [10H, JH, QH, KH, AH],
-            RS4: [8S, 9S, 10S],
-            RH5: [6H, 7H, 8H],
-            WJ6: [3D, 3S, 3H]
-        }
-        player 1 = {
-            RC: [3C, 4C, 5C],
-            RH: [10H, AH],
-            W3: [3D, 3S, 3H],
-            WA: [AC, AD, AS]
-        }
-        player 2 = {
-            RH: [JH, QH, KH],
-            RS: [8S, 9S, 10S],
-            RH: [6H, 7H, 8H]
-        }
-        """
-        # todo
-        # self.__check_pile_rummy()
-        # self.__check_table_pile_rummy()
-        return
-    
+    def legal_play(self, cards: list[Card]) -> bool:
+        if len(cards) < 3: return self.legal_play_addon(cards) # is it possible to use inheritance here?
+
+        # check W (all same rank)
+        ranks = Card.map_to_rank(cards)
+        if all(x == ranks[0] for x in ranks): return True
+        
+        # check R (all same suit, consecutive ranks)
+        suits = Card.map_to_suit(cards)
+        same_suit = all(x == suits[0] for x in suits)
+        consecutive_rank = sorted(ranks) == list(range(min(ranks), max(ranks)+1))
+
+        # by default, ace has a rank of 1, but it can also be played high (essentially rank of 14)
+        if Card.contains_ace(cards):
+            for i in range(len(ranks)):
+                if ranks[i] == 1:
+                    ranks[i] = 14
+
+            consecutive_rank = consecutive_rank or sorted(ranks) == list(range(min(ranks), max(ranks)+1))
+
+        return same_suit and consecutive_rank
+
+    """
+    Return true if given list of cards can be added on to existing plays on the table.
+    This method should only be called on lists with len < 3.
+    The empty case returns False.
+    """
+    def legal_play_addon(self, cards: list[Card]) -> bool:
+        match len(cards):
+            case 1:
+                # todo
+                pass
+            case 2:
+                # todo
+                pass
+            case _:
+                return False
+
+
+    """
+    Return true if the given cards are in the discard pile and are involved in a rummy.
+
+    definitions
+    "pile rummy" : 3 or more cards in the discard pile can be played together
+    "table rummy" : >= 1 card in the discard pile can be played somewhere on the table
+                    AND the rummy is called after a player discards
+                    (typically the card involved is the top card in the discard pile)
+    "pickup rummy" : >= 1 card in the discard pile can be played somewhere on the table
+                    AND the rummy is called after a player picks up
+                    (typically the card involved is NOT the top card in the discard pile)
+
+    for the purposes of writing the function, these semantics don't necessarily matter
+    we need to develop an efficient algorithm for checking whether any one card can be
+    played in conjunction with a potential mixture of discard and table cards
+
+    there are 3 cases:
+    - any 1 card in the discard pile can be attached to any of the table lists
+    - any 2 cards in the discard pile can be attached to any of the table lists
+    - any 3 or more cards in the discard pile can be played together
+    (plus the case that 0 cards in the discard pile can be played, i.e., no rummy)
+
+    """
+    def check_rummy(self, cards: list[Card]) -> bool:
+        match len(cards):
+            case 0:
+                return False
+            case 1:
+                # one card in the discard pile can be attached to a R / W on the table
+                # todo
+                pass
+            case 2:
+                # two cards in the discard pile can be attached to a R on the table
+                # todo
+                pass
+            case _:
+                # 3 or more cards can form a R / W
+                return self.legal_play(cards)
+            
     
     """
-    Count up each player's points for the current round and return them via a dict.
+    Count up each player's points for the current round and return them in a dict.
     """
     def tally_scores(self) -> dict[int,int]:
         scores = {}
@@ -112,13 +176,13 @@ class Game:
             cards_played = p.get_table()
             score = 0
             for key, cards in cards_played:
-                score += self.tally_cards(cards)
+                score += self.sum_points(cards)
             scores[p.get_id()] = score
 
     """
     Return the total point value of all the cards in given list.
     """
-    def tally_cards(self, cards: list[Card]) -> int:
+    def sum_points(self, cards: list[Card]) -> int:
         score = 0
         for c in cards:
             score += CARD_VALUES[c.get_rank()]
@@ -137,32 +201,37 @@ class Game:
         return deck
 
     """
-    Deal out cards for a new game of Rummy 500.
-    After this method returns, every player should have 7 cards in their hand, the 
-    pickup pile should have 1 card, and the discard pile should have all the rest.
+    Deal out NUM_CARDS_PER_PLAYER to the given players.
     """
-    def deal_cards(self, deck: list[Card]) -> None:
-        self.__deal_to_players(deck)
-        self.__deal_pickup_discard(deck)
-
-    def __deal_pickup_discard(self, deck: list[Card]) -> None:
-        self.pickup_pile = []
-        self.pickup_pile.append(deck.pop().set_status_and_player(CardStatus.PICKUP_PILE, None))
-        for card in deck:
-            card.set_status_and_player(CardStatus.DISCARD_PILE, None)
-        self.discard_pile = deck
-
-    def __deal_to_players(self, deck: list[Card]) -> None:
-        for p in self.players:
+    def deal_cards(self, deck: list[Card], players: list[Player]) -> None:
+        for p in players:
             for _ in range(NUM_CARDS_PER_PLAYER):
                 card = deck.pop()
-                card.set_status_and_player(CardStatus.HAND, p.get_id())
+                card.update(CardStatus.HAND, p.get_id())
                 p.add_to_hand(card)
+
+    """
+    Return a list of cards representing the discard pile.
+    """
+    def initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
+        discard = []
+        c = deck.pop().update(CardStatus.PILE_DISCARD)
+        discard.append(c)
+        return discard
+
+    """
+    Return a list of cards representing the pickup pile.
+    """
+    def initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
+        for card in deck:
+            card.update(CardStatus.PILE_PICKUP)
+        return deck
+
 
     def __str__(self) -> str:
         players = "\n\t".join(str_list(self.players))
         players = "\t" + players
-        return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.discard_pile)}\npickup pile: {format_list_of_str(self.pickup_pile)}"
+        return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.pile_discard)}\npickup pile: {format_list_of_str(self.pile_pickup)}"
 
 
 # trial game run
@@ -175,3 +244,11 @@ game = Game(players)
 # two = Card(Suit.CLUBS, Rank.TWO, CardStatus.TABLE)
 # game.tally_cards([two, jack, ace])
 
+# lst = [
+#     Card(Suit.HEARTS, Rank.FIVE, None),
+#     Card(Suit.HEARTS, Rank.SIX, None),
+#     Card(Suit.HEARTS, Rank.EIGHT, None),
+#     Card(Suit.HEARTS, Rank.SEVEN, None),
+#     Card(Suit.HEARTS, Rank.FOUR, None)
+# ]
+# print(game.legal_play(lst))
