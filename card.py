@@ -94,7 +94,24 @@ class Card:
     def contains_ace(cards: list['Card']) -> bool:
         ranks = Card.map_to_rank(cards)
         return Rank.ACE.value in ranks
-
+    
+    """
+    Return true if two cards are the same suit.
+    """
+    @staticmethod
+    def same_suit(c1: 'Card', c2: 'Card') -> bool:
+        return c1.get_suit() == c2.get_suit()
+    
+    """
+    Return true if two cards have consecutive rank.
+    """
+    @staticmethod
+    def consecutive_rank(c1: 'Card', c2: 'Card') -> bool:
+        r1 = c1.get_rank_value()
+        r2 = c2.get_rank_value()
+        # a king and ace are considered consecutive but have a difference in rank value of 12
+        return abs(r1-r2) == 1 or abs(r1-r2) == 12
+    
     def get_suit(self) -> 'Suit':
         return self.__suit
     
@@ -116,6 +133,15 @@ class Card:
     def __str__(self) -> str:
         return str(self.__rank) + str(self.__suit)
     
+    """
+    Convert the string representation of a card into a Card (with no status).
+    """
+    @staticmethod
+    def str_to_card(str: str) -> 'Card':
+        rank = Rank.str_to_rank(str[0])
+        suit = Suit.str_to_suit(str[1])
+        return Card(suit, rank, None)
+
 
 class Suit(Enum):
     CLUBS = 1
@@ -124,10 +150,32 @@ class Suit(Enum):
     HEARTS = 4
 
     def __str__(self) -> str:
-        if self == Suit.CLUBS: return "C"
-        elif self == Suit.DIAMONDS: return "D"
-        elif self == Suit.SPADES: return "S"
-        else: return "H"
+        match self:
+            case Suit.CLUBS:
+                return "C"
+            case Suit.DIAMONDS:
+                return "D"
+            case Suit.SPADES:
+                return "S"
+            case _:
+                return "H"
+
+    """
+    Convert the string representation of a suit into a Suit.
+    """
+    @staticmethod
+    def str_to_suit(str: str) -> 'Suit':
+        match str:
+            case "C":
+                return Suit.CLUBS
+            case "D":
+                return Suit.DIAMONDS
+            case "S":
+                return Suit.SPADES
+            case "H":
+                return Suit.HEARTS
+            case _:
+                print("Given string is not a valid Suit.")
 
 class Rank(Enum):
     ACE = 1
@@ -145,11 +193,34 @@ class Rank(Enum):
     KING = 13
 
     def __str__(self) -> str:
-        if self == Rank.ACE: return "A"
-        elif self == Rank.JACK: return "J"
-        elif self == Rank.QUEEN: return "Q"
-        elif self == Rank.KING: return "K"
-        else: return str(self.value)
+        match self:
+            case Rank.ACE:
+                return "A"
+            case Rank.JACK:
+                return "J"
+            case Rank.QUEEN:
+                return "Q"
+            case Rank.KING:
+                return "K"
+            case _:
+                return str(self.value)
+
+    """
+    Convert the string representation of a rank into a Rank.
+    """
+    @staticmethod
+    def str_to_rank(str: str) -> 'Rank':
+        match str:
+            case "A":
+                return Rank.ACE
+            case "J":
+                return Rank.JACK
+            case "Q":
+                return Rank.QUEEN
+            case "K":
+                return Rank.KING
+            case _:
+                return Rank(int(str))
 
 class CardStatus(Enum):
     """
@@ -187,4 +258,3 @@ class CardStatus(Enum):
 
     def __str__(self) -> str:
         return super().__str__()[11:]
-

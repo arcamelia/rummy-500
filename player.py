@@ -5,7 +5,8 @@ class Player:
     def __init__(self, id):
         self.__id: int = id
         self.__hand: list[Card] = []
-        self.__table: dict[Card] = {}
+        self.__played_cards: list[Card]     # for score tallying purposes only, unsorted
+        # todo: later self.__played_cards might need to be a dict (FE purposes)
 
     """
     Execute a turn for this player. Involves pickup, play, and discard phases.
@@ -31,7 +32,7 @@ class Player:
     def play_cards(self, cards: list[Card]) -> None:
         # todo: check if cards can be played
         # todo: remove from self.__hand
-        # todo: add to self.__table
+        # todo: add to self.__played_cards
         return
 
     def discard(self, card: Card) -> None:
@@ -72,8 +73,8 @@ class Player:
     def get_hand(self) -> list[Card]:
         return self.__hand
     
-    def get_table(self) -> dict[Card]:
-        return self.__table
+    def get_played_cards(self) -> list[Card]:
+        return self.__played_cards
     
     def __str__(self) -> str:
         return f"player {self.__id}: {', '.join(str_list(self.__hand))}"
