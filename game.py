@@ -2,8 +2,6 @@ from card import Card, Rank, Suit, CardStatus
 from player import Player
 from utils import str_list, format_list_of_str
 import random
-import copy
-import pprint
 
 MAX_PLAYERS = 7
 NUM_CARDS_PER_PLAYER = 7
