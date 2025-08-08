@@ -129,6 +129,8 @@ class Game:
     """
     Return true iff all cards in given list can be added on to existing plays on the table.
     This method should only be called on lists with len < 3.
+    TODO FUTURE: allow it to be called on lists with len >= 3 / need to figure out how to combine entries
+    in the table that can be joined
     """
     def legal_play_addon(self, cards: list[Card]) -> bool:
         match len(cards):
@@ -173,31 +175,9 @@ class Game:
 
     """
     Return true if the given cards are in the discard pile and are involved in a rummy.
-
-    definitions
-    "pile rummy" : 3 or more cards in the discard pile can be played together
-    "table rummy" : >= 1 card in the discard pile can be played somewhere on the table
-                    AND the rummy is called after a player discards
-                    (typically the card involved is the top card in the discard pile)
-    "pickup rummy" : >= 1 card in the discard pile can be played somewhere on the table
-                    AND the rummy is called after a player picks up
-                    (typically the card involved is NOT the top card in the discard pile)
-
-    for the purposes of writing the function, these semantics don't necessarily matter
-    we need to develop an efficient algorithm for checking whether any one card can be
-    played in conjunction with a potential mixture of discard and table cards
-
-    there are 3 cases:
-    - any 1 card in the discard pile can be attached to any of the table lists
-    - any 2 cards in the discard pile can be attached to any of the table lists
-    - any 3 or more cards in the discard pile can be played together
-    (plus the case that 0 cards in the discard pile can be played, i.e., no rummy)
-
     """
     def check_rummy(self, cards: list[Card]) -> bool:
-        # todo: check that the cards are in the discard pile
-        return self.legal_play(cards)
-            
+        return {c in self.pile_discard for c in cards} and self.legal_play(cards)
     
     """
     Count up each player's points for the current round and return them in a dict.
@@ -270,9 +250,7 @@ class Game:
     """
     def stringify_table(self) -> str:
             s = "{\n"
-            num_items = 0
             for key, value in self.table.items():
-                num_items += 1
                 s += '\t' + str(key) + ": "
                 s += format_list_of_str(str_list(value))
                 s += "\n"
