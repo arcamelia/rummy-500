@@ -70,11 +70,12 @@ class Game:
         self.pile_pickup = self.initialize_pile_pickup(deck)
         
         self.table: dict[str,list[Card]] = {}
-
-    """
-    Create and add the given number of players to the game (all with unique id).
-    """
+    
     def add_players(self, num_players: int) -> None:
+        """
+        Create and add the given number of players to the game (all with unique id).
+        """
+
         if num_players > MAX_PLAYERS:
             # todo: throw error
             print(f"Maximum number of players is {MAX_PLAYERS}")
@@ -83,10 +84,11 @@ class Game:
         for p in range(num_players):
             self.players.add(Player(p+1))
 
-    """
-    Rotate players' turns until it's not possible to continue, then return the game's score.
-    """
     def run(self) -> dict[int,int]:
+        """
+        Rotate players' turns until it's not possible to continue, then return the game's score.
+        """
+        
         while True:
             for p in self.players:
                 if len(self.pile_pickup) < 1:
@@ -101,17 +103,11 @@ class Game:
                     print(f"Player {p.get_id()} has gone out!")
                     return self.tally_scores()
 
-    """
-    todo: docstring
-    """
-    def can_play_from_discard(self, cards: list[Card]):
-        # todo: implement
-        return False
-
-    """
-    todo: docstring
-    """
     def run_turn_for_player(self, player: Player) -> None:
+        """
+        todo: docstring
+        """
+        
         # console-based ui version
         print(f"\n--- Player {player.get_id()}'s Turn ---")
 
@@ -120,74 +116,84 @@ class Game:
         print("Your hand:", format_list_of_str(hand))
         print("Discard pile:", format_list_of_str(self.pile_discard))
 
-        self.run_pickup_phase(player)
+        force_play_card = self.run_pickup_phase(player)
 
-        self.run_play_phase(player)
+        self.run_play_phase(player, force_play_card)
 
         self.run_discard_phase(player)
 
-    """
-    todo: docstring
-    """
-    def run_pickup_phase(self, player: Player) -> None:
+    def run_pickup_phase(self, player: Player) -> None | Card:
+        """
+        todo: docstring
+        """
+        
         add_to_hand: list[Card] = []
 
-        choice = input("Draw from (p)ickup or (d)iscard? [p/d] ").strip().lower()
+        choice = input("Draw from (p)ickup or (d)iscard pile? [p/d] ").strip().lower()
         if choice == "d":
 
             choice = input("Choose card index to pick up from (0-indexed): ").strip().lower()
             idx = int(choice)
+            add_to_hand = self.pile_discard[idx:]
+            chosen_card: Card = add_to_hand[0]
 
-            picked_up: list[Card] = self.pile_discard[idx:]
-            chosen_card: Card = picked_up[0]
-
-            # check if chosen card can be played right away
+            # check if chosen_card can be played right away
             if not self.legal_play_possible_with(player.get_hand(), chosen_card):
                 print(f"You must be able to use {str(chosen_card)} immediately. Invalid choice.")
                 return self.run_pickup_phase(player)
 
             # card can be played, proceed with pick up
             self.pile_discard = self.pile_discard[:idx]
-            for c in picked_up:
-                player.add_to_hand(c)
-            print(f"You drew {format_list_of_str(picked_up)} from discard pile.")
-
-            # TODO: enforce the player playing the card they picked up from
             
         elif choice == "p":
-            card = self.pile_pickup.pop()
-            print(f"You drew {card} from pickup pile.")
+            add_to_hand.append(self.pile_pickup.pop())
 
         else:
             print("Invalid input.")
-            return
+            return self.run_pickup_phase(player)
 
         for c in add_to_hand:
             player.add_to_hand(c)
         print("Your hand after pickup:", format_list_of_str(player.get_hand()))
 
-    """
-    todo: docstring
-    """
+        return chosen_card  # not None if taken from discard pile (i.e., card needs to be played immediately)
+
     def legal_play_possible_with(self, hand: list[Card], required_card: Card) -> bool:
+        """
+        todo: docstring
+        """
+        
         # TODO: implement
         # Try to form any set/run that includes required_card
         # Return True if possible, False otherwise
         return False
 
-    """
-    todo: docstring
-    """
-    def run_play_phase(self, player: Player) -> None:
-        # todo: implement
+    def run_play_phase(self, player: Player, force_play_card: Card = None) -> None:
+        """
+        todo: docstring
+        """
+        
+        if force_play_card is not None:
+            self.force_play(player, force_play_card)
+
         choice = input("Do you want to play any cards? [y/n] ").strip().lower()
         if choice == "y":
             print("Feature not yet implemented, skipping play...")
 
-    """
-    todo: docstring
-    """
+    def force_play(self, player: Player, card: Card) -> None:
+        """
+        Assumes validation (that given card can be played by given player) has already been done.
+        todo: doctstring
+        """
+        
+        # TODO: implement
+        ...
+
     def run_discard_phase(self, player: Player) -> None:
+        """
+        todo: docstring
+        """
+        
         print("Your hand:", format_list_of_str(player.get_hand()))
         choice = input("Choose card index to discard (0-indexed): ")
         idx = int(choice)
@@ -198,14 +204,17 @@ class Game:
         
         print(f"You discarded {discard_card}.\n")
     
-    """
-    Return true if given list of cards can form a legal play (could be a R or a W).
-    Constraint: will only return true if all cards in given list encompass a singular play
-                For example, if the list of cards looks like [2H, 2D, 2S, JH, QH, KH], the method 
-                will return false, as these two plays should be made separately (even though the 
-                two plays are legal on their own).
-    """
     def legal_play(self, cards: list[Card]) -> bool:
+        """
+        Return `True` if given list of cards can form a legal play (could be a *R* or a *W*).
+        
+        **Constraint:** will only return `True` if all cards in given list encompass a singular play.
+        
+        For example, if the list of cards looks like `[2H, 2D, 2S, JH, QH, KH]`, the method 
+        will return `False`, as these two plays should be made separately (even though the two
+        plays are legal on their own).
+        """
+        
         if len(cards) < 3: return self.legal_play_addon(cards) # is it possible to use inheritance here?
 
         # check W (all same rank)
@@ -227,13 +236,16 @@ class Game:
 
         return same_suit and consecutive_rank
 
-    """
-    Return true iff all cards in given list can be added on to existing plays on the table.
-    This method should only be called on lists with len < 3.
-    TODO FUTURE: allow it to be called on lists with len >= 3 / need to figure out how to combine entries
-    in the table that can be joined
-    """
     def legal_play_addon(self, cards: list[Card]) -> bool:
+        """
+        Return true iff all cards in given list can be added on to existing plays on the table.
+        
+        This method should only be called on lists with `len < 3`.
+        
+        **TODO FUTURE:** allow it to be called on lists with `len >= 3` / need to figure out how to combine entries
+        in the table that can be joined
+        """
+        
         match len(cards):
             case 1:
                 # could be R or W
@@ -247,10 +259,11 @@ class Game:
             case _:
                 return False
 
-    """
-    Return true if given card can be played on an existing R.
-    """
     def legal_one_card_play_r(self, card: Card) -> bool:
+        """
+        Return true if given card can be played on an existing *R*.
+        """
+        
         key_to_find = "R" + str(card.get_suit())
         potentials: dict[str,list[Card]] = {}
 
@@ -265,25 +278,28 @@ class Game:
 
         return False
     
-    """
-    Return true if given card can be played on an existing W.
-    """
     def legal_one_card_play_w(self, card: Card) -> bool:
+        """
+        Return true if given card can be played on an existing *W*.
+        """
+        
         key_to_find = "W" + str(card.get_rank())
         for k in self.table.keys():
             if k.startswith(key_to_find): return True
         return False
 
-    """
-    Return true if the given cards are in the discard pile and are involved in a rummy.
-    """
     def check_rummy(self, cards: list[Card]) -> bool:
+        """
+        Return true if the given cards are in the discard pile and are involved in a rummy.
+        """
+        
         return {c in self.pile_discard for c in cards} and self.legal_play(cards)
     
-    """
-    Count up each player's points for the current round and return them in a dict.
-    """
     def tally_scores(self) -> dict[int,int]:
+        """
+        Count up each player's points for the current round and return them in a dict.
+        """
+        
         scores = {}
         for p in self.players:
             cards_played = p.get_table()
@@ -292,19 +308,21 @@ class Game:
                 score += self.sum_points(cards)
             scores[p.get_id()] = score
 
-    """
-    Return the total point value of all the cards in given list.
-    """
     def sum_points(self, cards: list[Card]) -> int:
+        """
+        Return the total point value of all the cards in given list.
+        """
+        
         score = 0
         for c in cards:
             score += CARD_POINT_VALUES[c.get_rank()]
         return score
 
-    """
-    Initialize and return a new deck of shuffled cards.
-    """
     def initialize_deck(self) -> list[Card]:
+        """
+        Initialize and return a new deck of shuffled cards.
+        """
+        
         deck: list[Card] = []
         for s in Suit:
             for r in Rank:
@@ -313,51 +331,61 @@ class Game:
         random.shuffle(deck)
         return deck
 
-    """
-    Deal out NUM_CARDS_PER_PLAYER to the given players.
-    """
     def deal_cards(self, deck: list[Card], players: list[Player]) -> None:
+        """
+        Deal out `NUM_CARDS_PER_PLAYER` to the given players.
+        """
+        
         for p in players:
             for _ in range(NUM_CARDS_PER_PLAYER):
                 card = deck.pop()
                 card.update(CardStatus.HAND, p.get_id())
                 p.add_to_hand(card)
 
-    """
-    Return a list of cards representing the discard pile.
-    """
     def initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
+        """
+        Return a list of cards representing the discard pile.
+        """
+        
         c = deck.pop()
         c.update(CardStatus.PILE_DISCARD)
         return [ c, deck.pop(), deck.pop() ]
 
-    """
-    Return a list of cards representing the pickup pile.
-    """
     def initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
+        """
+        Return a list of cards representing the pickup pile.
+        """
+        
         for card in deck:
             card.update(CardStatus.PILE_PICKUP)
         return deck
 
     def get_players(self) -> list[Player]:
+        """
+        Getter for private `players` member.
+        """
         return list(self.players)
 
     def __str__(self) -> str:
+        """
+        Override of `str` method for `Game` class.
+        """
         players = "\n\t".join(str_list(self.players))
         players = "\t" + players
         return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.pile_discard)}\npickup pile: {format_list_of_str(self.pile_pickup)}"
 
-    """
-    Return a string representation of the table.
-    """
     def stringify_table(self) -> str:
-            s = "{\n"
-            for key, value in self.table.items():
-                s += '\t' + str(key) + ": "
-                s += format_list_of_str(str_list(value))
-                s += "\n"
-            s += "}"
-            return s
+        """
+        Return a string representation of `self.table`.
+        """
+        
+        s = "{\n"
+        for key, value in self.table.items():
+            s += '\t' + str(key) + ": "
+            s += format_list_of_str(str_list(value))
+            s += "\n"
+        s += "}"
+        return s
     
 
 ######################## TESTING ########################

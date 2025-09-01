@@ -7,10 +7,11 @@ class Card:
 
     ACE_HIGH = False
 
-    """
-    Initialize a new card for a game of Rummy 500. 
-    """
     def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None):
+        """
+        Initialize a new `Card` for a game of Rummy 500. 
+        """
+
         self.__suit: Suit = suit
         self.__rank: Rank = rank
         self.__status: CardStatus = status
@@ -24,20 +25,22 @@ class Card:
             # todo: throw an error
             print("player must be None when status is PILE_PICKUP or PILE_DISCARD")
 
-    """
-    Change the current card status to a new status, if it is allowed.
-    """
     def change_status(self, new_status: 'CardStatus') -> None:
+        """
+        Change the current card status to a new status, if it is allowed.
+        """
+        
         if not CardStatus.is_allowed_status_move(self.__status, new_status):
             # todo: throw error
             print(f"the new status ${new_status} is not an allowed change from current status ${self.__status}")
         else:
             self.__status = new_status
 
-    """
-    todo: docstring
-    """
     def update(self, new_status: 'CardStatus', new_pid: int = None) -> None:
+        """
+        todo: docstring
+        """
+        
         self.__status = new_status
 
         if new_status == CardStatus.PILE_PICKUP or new_status == CardStatus.PILE_DISCARD:
@@ -54,90 +57,111 @@ class Card:
 
         # todo: configure defaultly setting the player at the same time
 
-    """
-    Key function for sorting cards by suit and then by rank
-    """
     @staticmethod
     def __sort_key(card: 'Card', ace_high: bool) -> tuple[int,int]:
+        """
+        Key function for sorting cards by suit and then by rank
+        """
         if ace_high and card.get_rank() == Rank.ACE:
             rank_value = 14
         else: rank_value = card.get_rank_value()
         return (card.get_suit_value(), rank_value)
     
-    """
-    Sort a list of cards by suit and then by rank.
-    Order of suits: C, D, S, H.
-    Order of ranks: A, 2, 3, ..., J, Q, K (or A high if specified).
-    """
     @staticmethod
     def sort_by_suit_and_rank(cards: list['Card'], ace_high=False) -> list['Card']:
+        """
+        Sort a list of cards by suit and then by rank.
+        \nOrder of suits: C, D, S, H
+        \nOrder of ranks: A, 2, 3, ..., J, Q, K (or A high if specified)
+        """
         return sorted(cards, key=lambda card: Card.__sort_key(card, ace_high))
 
-    """
-    Convert a list of cards into a list of those cards' ranks.
-    """
     @staticmethod
     def map_to_rank(cards: list['Card']) -> list[int]:
+        """
+        Convert a list of cards into a list of those cards' ranks.
+        """
         return list(map(Card.get_rank_value, cards))
     
-    """
-    Convert a list of cards into a list of those cards' suits.
-    """
     @staticmethod
     def map_to_suit(cards: list['Card']) -> list[int]:
+        """
+        Convert a list of cards into a list of those cards' suits.
+        """
         return list(map(Card.get_suit_value, cards))
 
-    """
-    Return true if a list of cards contains an ace.
-    """
     @staticmethod
     def contains_ace(cards: list['Card']) -> bool:
+        """
+        Return true if given list of cards contains an ace.
+        """
         ranks = Card.map_to_rank(cards)
         return Rank.ACE.value in ranks
     
-    """
-    Return true if two cards are the same suit.
-    """
     @staticmethod
     def same_suit(c1: 'Card', c2: 'Card') -> bool:
+        """
+        Return true if two cards are the same suit.
+        """
         return c1.get_suit() == c2.get_suit()
     
-    """
-    Return true if two cards have consecutive rank.
-    """
     @staticmethod
     def consecutive_rank(c1: 'Card', c2: 'Card') -> bool:
+        """
+        Return true if two cards have consecutive rank.
+        """
         r1 = c1.get_rank_value()
         r2 = c2.get_rank_value()
         # a king and ace are considered consecutive but have a difference in rank value of 12
         return abs(r1-r2) == 1 or abs(r1-r2) == 12
     
     def get_suit(self) -> 'Suit':
+        """
+        Getter for private `__suit` member.
+        """
         return self.__suit
     
     def get_suit_value(self) -> int:
+        """
+        Getter for the `int` value of the private `__suit` member.
+        """
         return self.__suit.value
     
     def get_rank(self) -> 'Rank':
+        """
+        Getter for private `__rank` member.
+        """
         return self.__rank
     
     def get_rank_value(self) -> int:
+        """
+        Getter for the `int` value of the private `__rank` member.
+        """
         return self.__rank.value
     
     def get_status(self) -> 'CardStatus':
+        """
+        Getter for private `__status` member.
+        """
         return self.__status
     
     def get_player(self) -> int:
+        """
+        Getter for private `__player` member.
+        """
         return self.__player
     
     def __str__(self) -> str:
+        """
+        Override of `str` method for `Card` class.
+        """
         return str(self.__rank) + str(self.__suit)
     
-    """
-    Convert the string representation of a card into a Card (with no status).
-    """
     @staticmethod
     def str_to_card(str: str) -> 'Card':
+        """
+        Convert the string representation of a card into a `Card` (with no `status`).
+        """
         rank = Rank.str_to_rank(str[0])
         suit = Suit.str_to_suit(str[1])
         return Card(suit, rank, None)
@@ -150,6 +174,10 @@ class Suit(Enum):
     HEARTS = 4
 
     def __str__(self) -> str:
+        """
+        Override of `str` method for `Suit` class.
+        """
+
         match self:
             case Suit.CLUBS:
                 return "C"
@@ -160,11 +188,12 @@ class Suit(Enum):
             case _:
                 return "H"
 
-    """
-    Convert the string representation of a suit into a Suit.
-    """
     @staticmethod
     def str_to_suit(str: str) -> 'Suit':
+        """
+        Convert the string representation of a suit into a `Suit`.
+        """
+
         match str:
             case "C":
                 return Suit.CLUBS
@@ -193,6 +222,10 @@ class Rank(Enum):
     KING = 13
 
     def __str__(self) -> str:
+        """
+        Override of `str` method for `Rank` class.
+        """
+
         match self:
             case Rank.ACE:
                 return "A"
@@ -205,11 +238,12 @@ class Rank(Enum):
             case _:
                 return str(self.value)
 
-    """
-    Convert the string representation of a rank into a Rank.
-    """
     @staticmethod
     def str_to_rank(str: str) -> 'Rank':
+        """
+        Convert the string representation of a rank into a `Rank`.
+        """
+        
         match str:
             case "A":
                 return Rank.ACE
@@ -247,6 +281,9 @@ class CardStatus(Enum):
 
     @staticmethod
     def is_allowed_status_move(stat_1: 'CardStatus', stat_2: 'CardStatus') -> bool:
+        """
+        todo: docstring
+        """
         if stat_1 == CardStatus.PILE_PICKUP:
             return stat_2 == (CardStatus.HAND or CardStatus.PILE_PICKUP)
         elif stat_1 == CardStatus.PILE_DISCARD:
@@ -257,4 +294,7 @@ class CardStatus(Enum):
             return stat_2 == CardStatus.TABLE
 
     def __str__(self) -> str:
+        """
+        Convert the string representation of a card status into a `CardStatus`.
+        """
         return super().__str__()[11:]
