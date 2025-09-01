@@ -5,7 +5,7 @@ import random
 
 MAX_PLAYERS = 7
 NUM_CARDS_PER_PLAYER = 7
-CARD_VALUES = {
+CARD_POINT_VALUES = {
     Rank.TWO: 5,
     Rank.THREE: 5,
     Rank.FOUR: 5,
@@ -25,9 +25,9 @@ class Game:
     """
     Represents a game of Rummy 500.
     """
-    players: set[Player]
-    pile_pickup: list[Card]
-    pile_discard: list[Card]
+    players: set[Player]            # between 2 - MAX_PLAYERS
+    pile_pickup: list[Card]         # begins with many cards, but may become 0 at some point
+    pile_discard: list[Card]        # always has > 0 cards in it
     table: dict[str,list[Card]]
 
     """
@@ -89,14 +89,115 @@ class Game:
     def run(self) -> dict[int,int]:
         while True:
             for p in self.players:
-                if not p.can_pick_up():
-                    print("No more cards to pick up")
-                    return self.tally_scores()
-                p.run_turn()
+                if len(self.pile_pickup) < 1:
+                    # only perform the more cpu intensive check if necessary
+                    if not self.can_play_from_discard(p.get_hand()):
+                        print("No more cards to pick up")
+                        return self.tally_scores()
+                    
+                self.run_turn_for_player(p)
+
                 if not p.get_hand():
-                    print("A player has gotten rid of all their cards")
+                    print(f"Player {p.get_id()} has gone out!")
                     return self.tally_scores()
 
+    """
+    todo: docstring
+    """
+    def can_play_from_discard(self, cards: list[Card]):
+        # todo: implement
+        return False
+
+    """
+    todo: docstring
+    """
+    def run_turn_for_player(self, player: Player) -> None:
+        # console-based ui version
+        print(f"\n--- Player {player.get_id()}'s Turn ---")
+
+        # Show current hand and discard pile
+        hand = player.get_hand()
+        print("Your hand:", format_list_of_str(hand))
+        print("Discard pile:", format_list_of_str(self.pile_discard))
+
+        self.run_pickup_phase(player)
+
+        self.run_play_phase(player)
+
+        self.run_discard_phase(player)
+
+    """
+    todo: docstring
+    """
+    def run_pickup_phase(self, player: Player) -> None:
+        add_to_hand: list[Card] = []
+
+        choice = input("Draw from (p)ickup or (d)iscard? [p/d] ").strip().lower()
+        if choice == "d":
+
+            choice = input("Choose card index to pick up from (0-indexed): ").strip().lower()
+            idx = int(choice)
+
+            picked_up: list[Card] = self.pile_discard[idx:]
+            chosen_card: Card = picked_up[0]
+
+            # check if chosen card can be played right away
+            if not self.legal_play_possible_with(player.get_hand(), chosen_card):
+                print(f"You must be able to use {str(chosen_card)} immediately. Invalid choice.")
+                return self.run_pickup_phase(player)
+
+            # card can be played, proceed with pick up
+            self.pile_discard = self.pile_discard[:idx]
+            for c in picked_up:
+                player.add_to_hand(c)
+            print(f"You drew {format_list_of_str(picked_up)} from discard pile.")
+
+            # TODO: enforce the player playing the card they picked up from
+            
+        elif choice == "p":
+            card = self.pile_pickup.pop()
+            print(f"You drew {card} from pickup pile.")
+
+        else:
+            print("Invalid input.")
+            return
+
+        for c in add_to_hand:
+            player.add_to_hand(c)
+        print("Your hand after pickup:", format_list_of_str(player.get_hand()))
+
+    """
+    todo: docstring
+    """
+    def legal_play_possible_with(self, hand: list[Card], required_card: Card) -> bool:
+        # TODO: implement
+        # Try to form any set/run that includes required_card
+        # Return True if possible, False otherwise
+        return False
+
+    """
+    todo: docstring
+    """
+    def run_play_phase(self, player: Player) -> None:
+        # todo: implement
+        choice = input("Do you want to play any cards? [y/n] ").strip().lower()
+        if choice == "y":
+            print("Feature not yet implemented, skipping play...")
+
+    """
+    todo: docstring
+    """
+    def run_discard_phase(self, player: Player) -> None:
+        print("Your hand:", format_list_of_str(player.get_hand()))
+        choice = input("Choose card index to discard (0-indexed): ")
+        idx = int(choice)
+        discard_card = player.get_hand()[idx]
+
+        player.rmv_from_hand(discard_card, CardStatus.PILE_DISCARD)
+        self.pile_discard.append(discard_card)
+        
+        print(f"You discarded {discard_card}.\n")
+    
     """
     Return true if given list of cards can form a legal play (could be a R or a W).
     Constraint: will only return true if all cards in given list encompass a singular play
@@ -197,7 +298,7 @@ class Game:
     def sum_points(self, cards: list[Card]) -> int:
         score = 0
         for c in cards:
-            score += CARD_VALUES[c.get_rank()]
+            score += CARD_POINT_VALUES[c.get_rank()]
         return score
 
     """
@@ -226,10 +327,9 @@ class Game:
     Return a list of cards representing the discard pile.
     """
     def initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
-        discard = []
-        c = deck.pop().update(CardStatus.PILE_DISCARD)
-        discard.append(c)
-        return discard
+        c = deck.pop()
+        c.update(CardStatus.PILE_DISCARD)
+        return [ c, deck.pop(), deck.pop() ]
 
     """
     Return a list of cards representing the pickup pile.
@@ -239,6 +339,8 @@ class Game:
             card.update(CardStatus.PILE_PICKUP)
         return deck
 
+    def get_players(self) -> list[Player]:
+        return list(self.players)
 
     def __str__(self) -> str:
         players = "\n\t".join(str_list(self.players))
@@ -262,27 +364,32 @@ class Game:
 
 game = Game(2)
 
-rc1 = [ Card(Suit.CLUBS, Rank.FIVE, None), Card(Suit.CLUBS, Rank.SIX, None), Card(Suit.CLUBS, Rank.SEVEN, None) ]
-wa2 = [ Card(Suit.CLUBS, Rank.ACE, None), Card(Suit.DIAMONDS, Rank.ACE, None), Card(Suit.SPADES, Rank.ACE, None) ]
-rh3 = [ Card(Suit.HEARTS, Rank.TEN, None), Card(Suit.HEARTS, Rank.JACK, None), Card(Suit.HEARTS, Rank.QUEEN, None), Card(Suit.HEARTS, Rank.KING, None), Card(Suit.HEARTS, Rank.ACE, None) ]
-rs4 = [ Card(Suit.SPADES, Rank.EIGHT, None), Card(Suit.SPADES, Rank.NINE, None), Card(Suit.SPADES, Rank.TEN, None) ]
-rh5 = [ Card(Suit.HEARTS, Rank.SIX, None), Card(Suit.HEARTS, Rank.SEVEN, None), Card(Suit.HEARTS, Rank.EIGHT, None) ]
-w36 = [ Card(Suit.DIAMONDS, Rank.THREE, None), Card(Suit.SPADES, Rank.THREE, None), Card(Suit.HEARTS, Rank.THREE, None) ]
+############### initialize a table midgame ###############
 
-table = { "RC1": rc1, "WA2": wa2, "RH3": rh3, "RS4": rs4, "RH5": rh5, "W36": w36 }
-game.table = table
-print("table = " + game.stringify_table())
-"""
-table = {
-    RC1: [5C, 6C, 7C],
-    WA2: [AC, AD, AS],
-    RH3: [10H, JH, QH, KH, AH],
-    RS4: [8S, 9S, 10S],
-    RH5: [6H, 7H, 8H],
-    W36: [3D, 3S, 3H]
-}
-"""
+# rc1 = [ Card(Suit.CLUBS, Rank.FIVE, None), Card(Suit.CLUBS, Rank.SIX, None), Card(Suit.CLUBS, Rank.SEVEN, None) ]
+# wa2 = [ Card(Suit.CLUBS, Rank.ACE, None), Card(Suit.DIAMONDS, Rank.ACE, None), Card(Suit.SPADES, Rank.ACE, None) ]
+# rh3 = [ Card(Suit.HEARTS, Rank.TEN, None), Card(Suit.HEARTS, Rank.JACK, None), Card(Suit.HEARTS, Rank.QUEEN, None), Card(Suit.HEARTS, Rank.KING, None), Card(Suit.HEARTS, Rank.ACE, None) ]
+# rs4 = [ Card(Suit.SPADES, Rank.EIGHT, None), Card(Suit.SPADES, Rank.NINE, None), Card(Suit.SPADES, Rank.TEN, None) ]
+# rh5 = [ Card(Suit.HEARTS, Rank.SIX, None), Card(Suit.HEARTS, Rank.SEVEN, None), Card(Suit.HEARTS, Rank.EIGHT, None) ]
+# w36 = [ Card(Suit.DIAMONDS, Rank.THREE, None), Card(Suit.SPADES, Rank.THREE, None), Card(Suit.HEARTS, Rank.THREE, None) ]
 
-test_cards = [ Card(Suit.HEARTS, Rank.FIVE, None), Card(Suit.HEARTS, Rank.FOUR, None) ]
-print( f"{format_list_of_str(str_list(test_cards))} can be played: {game.legal_play(test_cards)}" )
+# table = { "RC1": rc1, "WA2": wa2, "RH3": rh3, "RS4": rs4, "RH5": rh5, "W36": w36 }
+# game.table = table
+# print("table = " + game.stringify_table())
+# """
+# table = {
+#     RC1: [5C, 6C, 7C],
+#     WA2: [AC, AD, AS],
+#     RH3: [10H, JH, QH, KH, AH],
+#     RS4: [8S, 9S, 10S],
+#     RH5: [6H, 7H, 8H],
+#     W36: [3D, 3S, 3H]
+# }
+# """
 
+# test_cards = [ Card(Suit.HEARTS, Rank.FIVE, None), Card(Suit.HEARTS, Rank.FOUR, None) ]
+# print( f"{format_list_of_str(str_list(test_cards))} can be played: {game.legal_play(test_cards)}" )
+
+#########################################################
+
+game.run_turn_for_player(game.get_players()[0])

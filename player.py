@@ -7,27 +7,10 @@ class Player:
         self.__hand: list[Card] = []
         self.__played_cards: list[Card]     # for score tallying purposes only, unsorted
         # todo: later self.__played_cards might need to be a dict (FE purposes)
-
-    """
-    Execute a turn for this player. Involves pickup, play, and discard phases.
-    """
-    def run_turn(self) -> None:
-        # todo
-        # 1. pickup from either pickup or discard pile
-        # 2. play any cards from hand
-        # 3. discard a card from hand
-        return
     
     """
-    Return true if this player can pick up a card from either the discard or pickup piles.
-    """
-    def can_pick_up(self) -> bool:
-        # todo
-        return False
-
-    """
     Play given cards from hand. This will remove them from this player's hand and 
-    add them to this player's table.
+    add them to this player's played cards.
     """
     def play_cards(self, cards: list[Card]) -> None:
         # todo: check if cards can be played
@@ -35,10 +18,6 @@ class Player:
         # todo: add to self.__played_cards
         return
 
-    def discard(self, card: Card) -> None:
-        # todo
-        return
-    
     """
     Add given card to this player's hand in sorted order.
     """
