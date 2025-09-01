@@ -2,6 +2,8 @@ from card import Card, Rank, Suit, CardStatus
 from player import Player
 from utils import str_list, format_list_of_str
 import random
+import itertools
+from typing import Callable
 
 MAX_PLAYERS = 7
 NUM_CARDS_PER_PLAYER = 7
@@ -103,11 +105,12 @@ class Game:
                     print(f"Player {p.get_id()} has gone out!")
                     return self.tally_scores()
 
+    # todo: test 4
     def run_turn_for_player(self, player: Player) -> None:
         """
-        todo: docstring
+        Run a complete turn for given player. This consists of pickup, play (optional 
+        unless pickup occurs from discard pile), and discard phases. 
         """
-        
         # console-based ui version
         print(f"\n--- Player {player.get_id()}'s Turn ---")
 
@@ -124,7 +127,17 @@ class Game:
 
     def run_pickup_phase(self, player: Player) -> None | Card:
         """
-        todo: docstring
+        Given player chooses a card and then picks it up, either from the pickup or discard pile.
+
+        If the player chooses a card from the pickup pile, the one on top of the deck is added to 
+        their hand.
+
+        If the player chooses a card from the discard pile, this method returns the chosen card and 
+        adds all other cards with index > the chosen card to the player's hand.
+
+        e.g., if the discard pile currently holds [ 3D, JS, 7C, 10C ] and the player chooses to pick 
+        up the JS, this method will return the JS, and add the 7C, 10C to the player's hand.
+        (We return the JS because it has to be played straight away.)
         """
         
         add_to_hand: list[Card] = []
@@ -134,8 +147,8 @@ class Game:
 
             choice = input("Choose card index to pick up from (0-indexed): ").strip().lower()
             idx = int(choice)
-            add_to_hand = self.pile_discard[idx:]
-            chosen_card: Card = add_to_hand[0]
+            add_to_hand = self.pile_discard[idx+1:]
+            chosen_card: Card = self.pile_discard[idx]
 
             # check if chosen_card can be played right away
             if not self.legal_play_possible_with(player.get_hand(), chosen_card):
@@ -156,42 +169,115 @@ class Game:
             player.add_to_hand(c)
         print("Your hand after pickup:", format_list_of_str(player.get_hand()))
 
-        return chosen_card  # not None if taken from discard pile (i.e., card needs to be played immediately)
+        return chosen_card  # not None if taken from discard pile
 
-    def legal_play_possible_with(self, hand: list[Card], required_card: Card) -> bool:
+    # todo: test (is required_card on its own ok?)
+    def legal_play_possible_with(self, aux: list[Card], required_card: Card) -> bool:
         """
-        todo: docstring
+        Return `True` if `required_card` can be legally played in conjunction with 0 or 
+        more of the cards contained in `aux` (the auxiliary card list).
         """
         
-        # TODO: implement
-        # Try to form any set/run that includes required_card
-        # Return True if possible, False otherwise
+        for num_extra_cards in range(4):
+            for subset in itertools.combinations(aux, num_extra_cards):
+                candidate = [required_card] + list(subset)
+
+                if self.legal_play(candidate):
+                    return True
+
         return False
 
-    def run_play_phase(self, player: Player, force_play_card: Card = None) -> None:
+    def run_play_phase(self, player: Player, reqd_card: Card = None) -> None:
         """
-        todo: docstring
+        Given player plays any number of cards from their hand onto the table.
+        
+        Validation is performed to ensure the chosen cards are legally playable.
         """
         
-        if force_play_card is not None:
-            self.force_play(player, force_play_card)
-
-        choice = input("Do you want to play any cards? [y/n] ").strip().lower()
-        if choice == "y":
-            print("Feature not yet implemented, skipping play...")
-
-    def force_play(self, player: Player, card: Card) -> None:
-        """
-        Assumes validation (that given card can be played by given player) has already been done.
-        todo: doctstring
-        """
+        if reqd_card is not None:
+            print(f"You now need to play the {reqd_card}, in addition to 0 or more other cards from your hand.")
+            self.__prompt_and_play(player, reqd_card, allow_skip=False)
         
-        # TODO: implement
-        ...
+        else: 
+            self.__prompt_and_play(player)
+    
+    # todo: test 3
+    def __prompt_and_play(self, player: Player, reqd_card: Card | None = None, allow_skip: bool = True) -> None:
+        """
+        Prompt given player to choose cards to play, then validate and apply the play if it's legal.
+
+        A normal phase of play is indicated by values of `reqd_card = None` and `allow_skip = True`.
+        """
+        while True:
+            if allow_skip:
+                choice = input("Do you want to play any cards? [y/n] ").strip().lower()
+                if choice == "n":
+                    return
+                if choice != "y":
+                    print("Invalid input. Try again.")
+                    continue
+
+            print("Your hand:", format_list_of_str(player.get_hand()))
+            indices_i = input("Choose card indices (0-indexed) from your hand to play (comma-separated): ").strip()
+            indices = self.__parse_input_to_list_of_indices(indices_i, len(player.get_hand()))
+            if indices is None:
+                print("Invalid input. Try again.")
+                continue
+
+            chosen_cards = [player.get_hand()[i] for i in indices] + ([] if reqd_card is None else [reqd_card])
+            print(f"Chosen cards: {format_list_of_str(chosen_cards)}")
+
+            if self.__try_play(player, chosen_cards):
+                reqd_card = None
+                allow_skip = True
+
+    # todo: test 2
+    def __try_play(self, player: Player, cards: list[Card]) -> bool:
+        """
+        Return true if given cards form a legal play, and are properly added to the table 
+        and removed from given player's hand.
+        """
+        if not self.legal_play(cards):
+            print("Invalid play. Try again.")
+            return False
+        
+        print("Valid play.")
+        self.__play_cards(player, cards)
+
+        print(f"Updated table: \n{self.stringify_table()}")
+        return True
+
+    def __parse_input_to_list_of_indices(self, input: str, max: int) -> list[int] | None:
+        """
+        Parse a comma-separated list of integers (in string format) as input into a `list` of 
+        `int` indices. If given input is invalid, return `None`.
+        """
+        if not input:
+            return []
+        
+        try:
+            indices = [int(x) for x in input.split(",")]
+        except ValueError:
+            return None
+        
+        if any(i < 0 or i >= max for i in indices):
+            return None
+        
+        return indices
+
+    # todo: test 1
+    def __play_cards(self, player: Player, cards: list[Card]) -> None:
+        """
+        Encompasses all behaviour that occurs when a player moves 1 or more cards 
+        from their hand onto the table as points.
+        """
+        player.play_cards(cards)
+        # todo: play the cards on the table, resolving any runs that can be joined
 
     def run_discard_phase(self, player: Player) -> None:
         """
-        todo: docstring
+        Given player chooses a card from their hand and then discards it (i.e., the 
+        chosen card gets placed at the end / the highest index of the discard pile).
         """
         
         print("Your hand:", format_list_of_str(player.get_hand()))
@@ -208,7 +294,8 @@ class Game:
         """
         Return `True` if given list of cards can form a legal play (could be a *R* or a *W*).
         
-        **Constraint:** will only return `True` if all cards in given list encompass a singular play.
+        **CONSTRAINT:** Method will only return `True` if all cards in given list encompass a 
+        singular play.
         
         For example, if the list of cards looks like `[2H, 2D, 2S, JH, QH, KH]`, the method 
         will return `False`, as these two plays should be made separately (even though the two
