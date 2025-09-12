@@ -31,6 +31,7 @@ class Game:
     pile_pickup: list[Card]         # begins with many cards, but may become 0 at some point
     pile_discard: list[Card]        # always has > 0 cards in it
     table: dict[str,list[Card]]
+    id_counter: int                 # used for generating keys in the table
 
     """
     Some notes on the table:
@@ -39,7 +40,8 @@ class Game:
         - prefix character of R (run) or W (wreck)
         - for a R, the second character indicates what suit it is
         - for a W, the second character indicates what rank it is
-        - the integer at the end indicates the order of play, and is unique to that sequence
+        - the integer at the end indicates the order of play, and is unique to that sequence (
+            determined by `self.id_counter`)
 
         when a player plays the 5H, it will be added to the front of RH5.
         however, when the 9H is played, it could be placed either at the front of RH3 or the 
@@ -72,6 +74,7 @@ class Game:
         self.pile_pickup = self.initialize_pile_pickup(deck)
         
         self.table: dict[str,list[Card]] = {}
+        self.id_counter = 0
     
     def add_players(self, num_players: int) -> None:
         """
@@ -105,7 +108,7 @@ class Game:
                     print(f"Player {p.get_id()} has gone out!")
                     return self.tally_scores()
 
-    # todo: test 4
+    # todo: test 3
     def run_turn_for_player(self, player: Player) -> None:
         """
         Run a complete turn for given player. This consists of pickup, play (optional 
@@ -171,7 +174,7 @@ class Game:
 
         return chosen_card  # not None if taken from discard pile
 
-    # todo: test (is required_card on its own ok?)
+    # todo: test 1 (is required_card on its own ok?)
     def legal_play_possible_with(self, aux: list[Card], required_card: Card) -> bool:
         """
         Return `True` if `required_card` can be legally played in conjunction with 0 or 
@@ -201,7 +204,7 @@ class Game:
         else: 
             self.__prompt_and_play(player)
     
-    # todo: test 3
+    # todo: test 2
     def __prompt_and_play(self, player: Player, reqd_card: Card | None = None, allow_skip: bool = True) -> None:
         """
         Prompt given player to choose cards to play, then validate and apply the play if it's legal.
@@ -218,6 +221,10 @@ class Game:
                     continue
 
             print("Your hand:", format_list_of_str(player.get_hand()))
+            type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w]").strip().upper()
+            if type_of_play != "R" and type_of_play != "W":
+                    print("Invalid input. Try again.")
+                    continue
             indices_i = input("Choose card indices (0-indexed) from your hand to play (comma-separated): ").strip()
             indices = self.__parse_input_to_list_of_indices(indices_i, len(player.get_hand()))
             if indices is None:
@@ -227,25 +234,50 @@ class Game:
             chosen_cards = [player.get_hand()[i] for i in indices] + ([] if reqd_card is None else [reqd_card])
             print(f"Chosen cards: {format_list_of_str(chosen_cards)}")
 
-            if self.__try_play(player, chosen_cards):
+            if self.__try_play(player, chosen_cards, type_of_play):
                 reqd_card = None
                 allow_skip = True
+            else:
+                print("Cards were not played successfully. Try again.")
 
-    # todo: test 2
-    def __try_play(self, player: Player, cards: list[Card]) -> bool:
+    def __try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
         """
-        Return true if given cards form a legal play, and are properly added to the table 
-        and removed from given player's hand.
+        Return `True` if given cards form a legal play, and are properly added to the table 
+        & removed from given player's hand.
         """
-        if not self.legal_play(cards):
+        if not self.legal_play(cards, type_of_play):
             print("Invalid play. Try again.")
             return False
         
         print("Valid play.")
-        self.__play_cards(player, cards)
+        self.__play_cards(player, cards, type_of_play)
 
         print(f"Updated table: \n{self.stringify_table()}")
         return True
+
+    def __play_cards(self, player: Player, cards: list[Card], type_of_play: str) -> None:
+        """
+        Encompasses all behaviour that occurs when a player moves 1 or more cards 
+        from their hand onto the table as points.
+
+        Return `True` if cards are successfully played.
+
+        **CONSTRAINT**: `type_of_play = "R" | "W"`, cards have already been tested for validity
+        """
+        player.move_cards_to_played(cards)
+
+        play_key = self.__find_play_match(cards, type_of_play)
+
+        if play_key == None:
+            # new play on the table
+            new_key = self.__create_key(cards, type_of_play)
+            self.table[new_key] = cards
+        else:
+            # add on to an existing play on the table
+            old_play_list = self.table[play_key]
+            self.table[play_key] = Card.sort_by_suit_and_rank(old_play_list + cards)
+        
+        self.__clean_up_table()
 
     def __parse_input_to_list_of_indices(self, input: str, max: int) -> list[int] | None:
         """
@@ -265,14 +297,102 @@ class Game:
         
         return indices
 
-    # todo: test 1
-    def __play_cards(self, player: Player, cards: list[Card]) -> None:
+    def __clean_up_table(self):
         """
-        Encompasses all behaviour that occurs when a player moves 1 or more cards 
-        from their hand onto the table as points.
+        Join any runs together in `self.table` that are connected.
         """
-        player.play_cards(cards)
-        # todo: play the cards on the table, resolving any runs that can be joined
+        to_rmv = []
+
+        for k1, v1 in self.table.items():
+            for k2, v2 in self.table.items():
+
+                if k1.startswith("R") and k2.startswith("R") and k1 != k2:
+                    if self.__cards_can_be_joined(v1, v2, "R"):
+                        self.table[k1] = Card.sort_by_suit_and_rank(v1 + v2)
+                        to_rmv.append(k2)
+        
+        for k in to_rmv:
+            self.table.pop(k)
+    
+    def __find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
+        """
+        Find a list of cards on the table, if one exists, that param cards can be added to. 
+        Return the key of matching list if successful, otherwise return `None`.
+
+        Arbitrarily return the first play match found if more than one exists.
+        """
+        filtered_table = { k: v for k, v in self.table.items() if k.startswith(type_of_play) }
+       
+        for k, v in filtered_table.items():
+            if self.__cards_can_be_joined(v, cards, type_of_play):
+                return k 
+             
+        return None
+
+    def __cards_can_be_joined(self, cards_1: list[Card], cards_2: list[Card], type_of_play: str) -> bool:
+        """
+        Return `True` if two lists of cards can be joined, based on the `type_of_play`.
+
+        **CONSTRAINT**: neither list can be empty, one of the lists must contain at least 3 cards
+        """
+        if type_of_play == "W":
+            return cards_1[0].get_rank() == cards_2[0].get_rank()
+        
+        # type_of_play == "R"
+        if cards_1[0].get_suit() != cards_2[0].get_suit():
+            return False
+        
+        high_ace = self.__high_ace(cards_1) or self.__high_ace(cards_2) or self.__high_ace(cards_1 + cards_2)
+        amalgamated_cards = Card.sort_by_suit_and_rank(cards_1 + cards_2, high_ace)
+        counter = amalgamated_cards[0].get_rank_value()     # lowest rank in list
+        
+        for c in amalgamated_cards:
+            if c.get_rank_value() != counter:
+                if counter == 14 and c.get_rank() == Rank.ACE:
+                    # special handling for a high ace
+                    continue
+                else:
+                    return False
+            counter += 1
+        
+        return True
+
+    def __high_ace(self, cards: list[Card]):
+        """
+        Return `True` if there is an ace in the list of cards that should be represented 
+        as a high card (a rank value of 14 instead of the default 1).
+
+        - If there is only one card in the list and it is an ace, `False` will be returned.
+        - If all 13 cards from the suit are in the list, `False` will be returned.
+
+        **CONSTRAINT**: This method should only be called on a list of cards of the same 
+        suit. The method will not validate this constraint is upheld.
+        """
+        if len(cards) == 13 or len(cards) == 1:
+            return False
+        
+        ranks = { c.get_rank() for c in cards }
+        return Rank.ACE in ranks and Rank.KING in ranks      
+
+    def __create_key(self, cards: list[Card], type_of_play: str) -> str:
+        """
+        Return a new, unique key for given list of cards to be played on the table.
+
+        key formation:
+        - prefix character of R (run) or W (wreck)
+        - for a R, the second character indicates what suit it is
+        - for a W, the second character indicates what rank it is
+        - the integer at the end indicates the order of play, and is unique to that sequence 
+        (note though, that the integers are not necessarily consecutive)
+            - e.g., RH8 was started after W35, but there need not be keys XX6, XX7 in between 
+            (which could occur if runs were joined)
+        """
+        self.id_counter += 1
+        if type_of_play == "R":
+            suit_rank_id = str(cards[0].get_suit())
+        else:
+            suit_rank_id = str(cards[0].get_rank())
+        return type_of_play + suit_rank_id + str(self.id_counter)
 
     def run_discard_phase(self, player: Player) -> None:
         """
@@ -290,9 +410,14 @@ class Game:
         
         print(f"You discarded {discard_card}.\n")
     
-    def legal_play(self, cards: list[Card]) -> bool:
+    def legal_play(self, cards: list[Card], type_of_play: str) -> bool:
         """
-        Return `True` if given list of cards can form a legal play (could be a *R* or a *W*).
+        Return `True` if given list of cards can form a legal play (could be a *R* [`type_of_play="R"`] 
+        or a *W* [`type_of_play="W"`]).
+
+        If the value of `type_of_play` does not match the type of play that can be legally formed, 
+        the method will return `False` (i.e., responsibility is on the caller to ensure the type of play 
+        is classified correctly).
         
         **CONSTRAINT:** Method will only return `True` if all cards in given list encompass a 
         singular play.
@@ -302,11 +427,11 @@ class Game:
         plays are legal on their own).
         """
         
-        if len(cards) < 3: return self.legal_play_addon(cards) # is it possible to use inheritance here?
+        if len(cards) < 3: return self.legal_play_addon(cards, type_of_play) # is it possible to use inheritance here?
 
         # check W (all same rank)
         ranks = Card.map_to_rank(cards)
-        if all(x == ranks[0] for x in ranks): return True
+        if all(x == ranks[0] for x in ranks) and type_of_play == "W": return True
         
         # check R (all same suit, consecutive ranks)
         suits = Card.map_to_suit(cards)
@@ -321,11 +446,12 @@ class Game:
 
             consecutive_rank = consecutive_rank or sorted(ranks) == list(range(min(ranks), max(ranks)+1))
 
-        return same_suit and consecutive_rank
+        return same_suit and consecutive_rank and type_of_play == "R"
 
-    def legal_play_addon(self, cards: list[Card]) -> bool:
+    def legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
         """
-        Return true iff all cards in given list can be added on to existing plays on the table.
+        Return true iff all cards in given list can be added on to existing plays on the table AND 
+        is classified under the correct type of play (`"R"` or `"W"`).
         
         This method should only be called on lists with `len < 3`.
         
@@ -336,9 +462,14 @@ class Game:
         match len(cards):
             case 1:
                 # could be R or W
-                return self.legal_one_card_play_r(cards[0]) or self.legal_one_card_play_w(cards[0])
+                return (
+                    self.legal_one_card_play_r(cards[0]) and type_of_play == "R"
+                ) or (
+                    self.legal_one_card_play_w(cards[0]) and type_of_play == "W"
+                )
             case 2:
                 # can only be R
+                if type_of_play != "R": return False
                 c1: Card = cards[0]
                 c2: Card = cards[1]
                 one_card_legal = self.legal_one_card_play_r(c1) or self.legal_one_card_play_r(c2)
@@ -481,30 +612,36 @@ game = Game(2)
 
 ############### initialize a table midgame ###############
 
-# rc1 = [ Card(Suit.CLUBS, Rank.FIVE, None), Card(Suit.CLUBS, Rank.SIX, None), Card(Suit.CLUBS, Rank.SEVEN, None) ]
-# wa2 = [ Card(Suit.CLUBS, Rank.ACE, None), Card(Suit.DIAMONDS, Rank.ACE, None), Card(Suit.SPADES, Rank.ACE, None) ]
-# rh3 = [ Card(Suit.HEARTS, Rank.TEN, None), Card(Suit.HEARTS, Rank.JACK, None), Card(Suit.HEARTS, Rank.QUEEN, None), Card(Suit.HEARTS, Rank.KING, None), Card(Suit.HEARTS, Rank.ACE, None) ]
-# rs4 = [ Card(Suit.SPADES, Rank.EIGHT, None), Card(Suit.SPADES, Rank.NINE, None), Card(Suit.SPADES, Rank.TEN, None) ]
-# rh5 = [ Card(Suit.HEARTS, Rank.SIX, None), Card(Suit.HEARTS, Rank.SEVEN, None), Card(Suit.HEARTS, Rank.EIGHT, None) ]
-# w36 = [ Card(Suit.DIAMONDS, Rank.THREE, None), Card(Suit.SPADES, Rank.THREE, None), Card(Suit.HEARTS, Rank.THREE, None) ]
+rc1 = [ Card(Suit.CLUBS, Rank.FIVE, None), Card(Suit.CLUBS, Rank.SIX, None), Card(Suit.CLUBS, Rank.SEVEN, None) ]
+wa2 = [ Card(Suit.CLUBS, Rank.ACE, None), Card(Suit.DIAMONDS, Rank.ACE, None), Card(Suit.SPADES, Rank.ACE, None) ]
+rh3 = [ Card(Suit.HEARTS, Rank.TEN, None), Card(Suit.HEARTS, Rank.JACK, None), Card(Suit.HEARTS, Rank.QUEEN, None), Card(Suit.HEARTS, Rank.KING, None) ]
+rs4 = [ Card(Suit.SPADES, Rank.EIGHT, None), Card(Suit.SPADES, Rank.NINE, None), Card(Suit.SPADES, Rank.TEN, None) ]
+rh5 = [ Card(Suit.HEARTS, Rank.SIX, None), Card(Suit.HEARTS, Rank.SEVEN, None), Card(Suit.HEARTS, Rank.EIGHT, None) ]
+w36 = [ Card(Suit.DIAMONDS, Rank.THREE, None), Card(Suit.SPADES, Rank.THREE, None), Card(Suit.HEARTS, Rank.THREE, None) ]
 
-# table = { "RC1": rc1, "WA2": wa2, "RH3": rh3, "RS4": rs4, "RH5": rh5, "W36": w36 }
-# game.table = table
-# print("table = " + game.stringify_table())
-# """
-# table = {
-#     RC1: [5C, 6C, 7C],
-#     WA2: [AC, AD, AS],
-#     RH3: [10H, JH, QH, KH, AH],
-#     RS4: [8S, 9S, 10S],
-#     RH5: [6H, 7H, 8H],
-#     W36: [3D, 3S, 3H]
-# }
-# """
+game.table = { "RC1": rc1, "WA2": wa2, "RH3": rh3, "RS4": rs4, "RH5": rh5, "W36": w36 }
+print("table = " + game.stringify_table())
+"""
+table = {
+    RC1: [5C, 6C, 7C],
+    WA2: [AC, AD, AS],
+    RH3: [10H, JH, QH, KH],
+    RS4: [8S, 9S, 10S],
+    RH5: [6H, 7H, 8H],
+    W36: [3D, 3S, 3H]
+}
+"""
+eight_nine_clubs = [ Card(Suit.CLUBS, Rank.EIGHT, None), Card(Suit.CLUBS, Rank.NINE, None) ]
+jack_to_king_spades = [ Card(Suit.SPADES, Rank.JACK, None), Card(Suit.SPADES, Rank.QUEEN, None), Card(Suit.SPADES, Rank.KING, None) ]
+nine_hearts = [ Card(Suit.HEARTS, Rank.NINE, None) ]
+three_clubs = [ Card(Suit.CLUBS, Rank.THREE, None) ]
+king_clubs = [ Card(Suit.CLUBS, Rank.KING, None) ]
+
+#########################################################
 
 # test_cards = [ Card(Suit.HEARTS, Rank.FIVE, None), Card(Suit.HEARTS, Rank.FOUR, None) ]
 # print( f"{format_list_of_str(str_list(test_cards))} can be played: {game.legal_play(test_cards)}" )
 
 #########################################################
 
-game.run_turn_for_player(game.get_players()[0])
+# game.run_turn_for_player(game.get_players()[0])

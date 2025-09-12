@@ -5,7 +5,7 @@ class Player:
     def __init__(self, id):
         self.__id: int = id
         self.__hand: list[Card] = []
-        self.__played_cards: list[Card]     # for score tallying purposes only, unsorted
+        self.__played_cards: list[Card] = []    # for score tallying purposes only, unsorted
         # todo: later self.__played_cards might need to be a dict (FE purposes)
 
     def add_to_hand(self, card: Card) -> None:
@@ -27,7 +27,7 @@ class Player:
         card.update(next_status, None)
         self.__hand.remove(card)  # idk if __eq__ needs to be overriden in Card
 
-    def play_cards(self, cards: list[Card]) -> None:
+    def move_cards_to_played(self, cards: list[Card]) -> None:
         """
         Play given cards out of this player's hand. Only handles player functionality 
         (doesn't record cards on the table in the `Game`).
