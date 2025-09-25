@@ -67,11 +67,11 @@ class Game:
     def __init__(self, num_players):
         self.players = set()
         self.add_players(num_players)
-        deck: list[Card] = self.initialize_deck()
-        self.deal_cards(deck, self.players)
+        deck: list[Card] = self.__initialize_deck()
+        self.__deal_cards(deck, self.players)
 
-        self.pile_discard = self.initialize_pile_discard(deck)
-        self.pile_pickup = self.initialize_pile_pickup(deck)
+        self.pile_discard = self.__initialize_pile_discard(deck)
+        self.pile_pickup = self.__initialize_pile_pickup(deck)
         
         self.table: dict[str,list[Card]] = {}
         self.id_counter = 0
@@ -427,7 +427,7 @@ class Game:
         plays are legal on their own).
         """
         
-        if len(cards) < 3: return self.legal_play_addon(cards, type_of_play) # is it possible to use inheritance here?
+        if len(cards) < 3: return self.__legal_play_addon(cards, type_of_play) # is it possible to use inheritance here?
 
         # check W (all same rank)
         ranks = Card.map_to_rank(cards)
@@ -448,36 +448,33 @@ class Game:
 
         return same_suit and consecutive_rank and type_of_play == "R"
 
-    def legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
+    def __legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
         """
         Return true iff all cards in given list can be added on to existing plays on the table AND 
         is classified under the correct type of play (`"R"` or `"W"`).
         
         This method should only be called on lists with `len < 3`.
-        
-        **TODO FUTURE:** allow it to be called on lists with `len >= 3` / need to figure out how to combine entries
-        in the table that can be joined
         """
         
         match len(cards):
             case 1:
                 # could be R or W
                 return (
-                    self.legal_one_card_play_r(cards[0]) and type_of_play == "R"
+                    self.__legal_one_card_play_r(cards[0]) and type_of_play == "R"
                 ) or (
-                    self.legal_one_card_play_w(cards[0]) and type_of_play == "W"
+                    self.__legal_one_card_play_w(cards[0]) and type_of_play == "W"
                 )
             case 2:
                 # can only be R
                 if type_of_play != "R": return False
                 c1: Card = cards[0]
                 c2: Card = cards[1]
-                one_card_legal = self.legal_one_card_play_r(c1) or self.legal_one_card_play_r(c2)
+                one_card_legal = self.__legal_one_card_play_r(c1) or self.__legal_one_card_play_r(c2)
                 return one_card_legal and Card.same_suit(c1, c2) and Card.consecutive_rank(c1, c2)
             case _:
                 return False
 
-    def legal_one_card_play_r(self, card: Card) -> bool:
+    def __legal_one_card_play_r(self, card: Card) -> bool:
         """
         Return true if given card can be played on an existing *R*.
         """
@@ -496,7 +493,7 @@ class Game:
 
         return False
     
-    def legal_one_card_play_w(self, card: Card) -> bool:
+    def __legal_one_card_play_w(self, card: Card) -> bool:
         """
         Return true if given card can be played on an existing *W*.
         """
@@ -523,10 +520,10 @@ class Game:
             cards_played = p.get_table()
             score = 0
             for key, cards in cards_played:
-                score += self.sum_points(cards)
+                score += self.__sum_points(cards)
             scores[p.get_id()] = score
 
-    def sum_points(self, cards: list[Card]) -> int:
+    def __sum_points(self, cards: list[Card]) -> int:
         """
         Return the total point value of all the cards in given list.
         """
@@ -536,7 +533,7 @@ class Game:
             score += CARD_POINT_VALUES[c.get_rank()]
         return score
 
-    def initialize_deck(self) -> list[Card]:
+    def __initialize_deck(self) -> list[Card]:
         """
         Initialize and return a new deck of shuffled cards.
         """
@@ -549,7 +546,7 @@ class Game:
         random.shuffle(deck)
         return deck
 
-    def deal_cards(self, deck: list[Card], players: list[Player]) -> None:
+    def __deal_cards(self, deck: list[Card], players: list[Player]) -> None:
         """
         Deal out `NUM_CARDS_PER_PLAYER` to the given players.
         """
@@ -560,7 +557,7 @@ class Game:
                 card.update(CardStatus.HAND, p.get_id())
                 p.add_to_hand(card)
 
-    def initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
+    def __initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
         """
         Return a list of cards representing the discard pile.
         """
@@ -569,7 +566,7 @@ class Game:
         c.update(CardStatus.PILE_DISCARD)
         return [ c, deck.pop(), deck.pop() ]
 
-    def initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
+    def __initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
         """
         Return a list of cards representing the pickup pile.
         """
