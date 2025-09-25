@@ -21,10 +21,17 @@ class Player:
         Remove given card from this player's hand and mark it as in either PILE_DISCARD 
         or TABLE status.
         """
-        if next_status not in (CardStatus.PILE_DISCARD, CardStatus.TABLE):
+        if next_status == CardStatus.TABLE:
+            next_pid = self.__id
+            self.__played_cards.append(card)
+        elif next_status == CardStatus.PILE_DISCARD:
+            next_pid = None
+        else:
             # todo: throw error
-            print("A card cannot change from a hand to pickup pile or hand")
-        card.update(next_status, None)
+            print("Error removing card from hand: card cannot change from a HAND to PILE_PICKUP or HAND status")
+            return           
+            
+        card.update(next_status, next_pid)
         self.__hand.remove(card)  # idk if __eq__ needs to be overriden in Card
 
     def move_cards_to_played(self, cards: list[Card]) -> None:
@@ -33,8 +40,7 @@ class Player:
         (doesn't record cards on the table in the `Game`).
         """
         for c in cards:
-            c.update(CardStatus.TABLE)
-            self.__played_cards.append(c)
+            self.rmv_from_hand(c, CardStatus.TABLE)
     
     def sort_hand(self) -> None:
         """

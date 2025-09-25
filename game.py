@@ -95,7 +95,6 @@ class Game:
                     print(f"Player {p.get_id()} has gone out!")
                     return self.tally_scores()
 
-    # todo: test 3
     def run_turn_for_player(self, player: Player) -> None:
         """
         Run a complete turn for given player. This consists of pickup, play (optional 
@@ -149,6 +148,7 @@ class Game:
             self.pile_discard = self.pile_discard[:idx]
             
         elif choice == "p":
+            chosen_card = None
             add_to_hand.append(self.pile_pickup.pop())
 
         else:
@@ -317,10 +317,9 @@ class Game:
             if k.startswith(key_to_find): return True
         return False
 
-    # todo: test 2
     def __prompt_and_play(self, player: Player, reqd_card: Card | None = None, allow_skip: bool = True) -> None:
         """
-        Prompt given player to choose cards to play, then validate and apply the play if it's legal.
+        Prompt given player to choose cards to play, then apply the play if it's legal.
 
         A normal phase of play is indicated by values of `reqd_card = None` and `allow_skip = True`.
         """
@@ -334,7 +333,7 @@ class Game:
                     continue
 
             print("Your hand:", format_list_of_str(player.get_hand()))
-            type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w]").strip().upper()
+            type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w] ").strip().upper()
             if type_of_play != "R" and type_of_play != "W":
                     print("Invalid input. Try again.")
                     continue
@@ -389,7 +388,7 @@ class Game:
             # add on to an existing play on the table
             old_play_list = self.table[play_key]
             self.table[play_key] = Card.sort_by_suit_and_rank(old_play_list + cards)
-        
+
         self.__clean_up_table()
 
     def __parse_input_to_list_of_indices(self, input: str, max: int) -> list[int] | None:
@@ -625,7 +624,7 @@ _4c = Card(Suit.CLUBS, Rank.FOUR, None)
 _5c = Card(Suit.CLUBS, Rank.FIVE, None)
 _6c = Card(Suit.CLUBS, Rank.SIX, None)
 _7c = Card(Suit.CLUBS, Rank.SEVEN, None)
-_8c = Card(Suit.CLUBS, Rank.EIGHT, None)
+_8c = Card(Suit.CLUBS, Rank.EIGHT, 0)
 _9c = Card(Suit.CLUBS, Rank.NINE, None)
 _10c = Card(Suit.CLUBS, Rank.TEN, None)
 _jc = Card(Suit.CLUBS, Rank.JACK, None)
@@ -720,4 +719,5 @@ table = {
 
 #########################################################
 
-# game.run_turn_for_player(game.get_players()[0])
+game.get_players()[0].add_to_hand(_8c)
+game.run_turn_for_player(game.get_players()[0])
