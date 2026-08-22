@@ -4,6 +4,7 @@ from utils import str_list, format_list_of_str
 import random
 import itertools
 from typing import Callable
+from errors.exceptions import DuplicateIDError
 
 MAX_PLAYERS = 7
 NUM_CARDS_PER_PLAYER = 7
@@ -614,6 +615,30 @@ class Game:
         g.table = {k: [Card.from_dict(cd) for cd in v] for k, v in table_obj.items()}
 
         g.id_counter = d.get('id_counter', 0)
+
+        # Validate no duplicate card IDs across the reconstructed game state
+        seen = set()
+        def check_and_add(card: Card):
+            cid = card.get_id()
+            if cid in seen:
+                raise DuplicateIDError(f"Duplicate card_id detected during Game.from_dict: {cid}")
+            seen.add(cid)
+
+        for p in g.players:
+            for c in p.get_hand():
+                check_and_add(c)
+            for c in p.get_played_cards():
+                check_and_add(c)
+
+        for c in g.pile_pickup:
+            check_and_add(c)
+        for c in g.pile_discard:
+            check_and_add(c)
+
+        for k, v in g.table.items():
+            for c in v:
+                check_and_add(c)
+
         return g
 
 

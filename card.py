@@ -231,9 +231,19 @@ class Card:
             raise DeserializationError("Card.from_dict: card_id is required and must be a string")
 
         card = Card(suit=suit, rank=rank, status=status, player=player)
-        # restore original id (use name-mangled attribute)
-        card._Card__id = cid
+        # restore original id using internal setter (preferred over direct name-mangling)
+        card._set_id_for_deserialization(cid)
         return card
+
+    def _set_id_for_deserialization(self, cid: str) -> None:
+        """Internal helper to set the card id during deserialization.
+
+        This exists so callers do not need to rely on name-mangled attribute
+        assignment (`_Card__id`) which is brittle.
+        """
+        if cid is None or not isinstance(cid, str):
+            raise DeserializationError("card id must be a non-empty string for deserialization")
+        self.__id = cid
 
 
 class Suit(Enum):
