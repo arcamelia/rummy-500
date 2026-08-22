@@ -1,1 +1,61 @@
 # rummy-500
+
+A small engine for the Rummy 500 card game with serialization and a CLI adapter.
+
+**Quick Overview**
+- **Card identity:** `Card` auto-generates a persistent `card_id` at construction. `Card.from_dict()` requires a `card_id` in the input and restores it during deserialization. Equality and hashing are based on `card_id`.
+- **Serialization keys:** use `card_id` and `player_id` in `to_dict()`/`from_dict()` payloads.
+- **Engine / UI separation:** `Game` is UI-agnostic; `GameConsoleAdapter` provides the interactive CLI layer.
+- **Validation & errors:** deserializers validate inputs and raise `ValueError` for malformed payloads; code uses exceptions instead of prints.
+- **Immutability:** getters return snapshots (tuples) to avoid accidental mutation of internal state.
+
+**Usage notes**
+- Create a card: `Card(Suit.HEARTS, Rank.ACE)` — it will receive a generated `card_id`.
+- Serialize: call `to_dict()` on `Card`, `Player`, or `Game`.
+- Deserialize: call `Card.from_dict(d)` (the dictionary must include a string `card_id`).
+Export: `json.dumps(game.to_dict())`
+Import: `game = Game.from_dict(json.loads(s))`
+
+**Quick checks**
+Run a quick syntax check after edits:
+```bash
+python3 -m py_compile card.py player.py game.py
+```
+
+**Next steps**
+- Add unit tests for serialization round-trips and identity preservation.
+- Outline server/client (FastAPI/WebSockets) and React frontend scaffold.
+
+## Prioritized Fixes & Design Notes
+
+This project has been analyzed for correctness, security, and maintainability. Below is a prioritized list of issues, explanations, and concrete fixes to guide refactors and future work.
+
+### Top Risks — Do First (P0) - Harden deserialization and identity preservation
+- Ensure `card_id` is required and a string in `Card.from_dict()` (implemented).
+- Detect duplicate `card_id` values during `Game.from_dict()` and reject invalid game snapshots (add `DuplicateIDError` / `DeserializationError`).
+- Avoid ad-hoc name-mangling assignments like `card._Card__id = cid`; provide an internal API such as `Card._set_id_for_deserialization(cid)` or `Card._from_serialized(...)`.
+
+### Important Correctness & Design Issues — Do Soon (P1)
+- Table representation is brittle: it encodes play metadata in string keys (e.g., `RH3`). Introduce `Play` (dataclass) and `Table` manager classes, and move table logic (find match, join plays, cleanup) there.
+- Break up large methods into smaller helpers to improve readability and testability:
+	- `Game.legal_play_spec` → `_is_wreck`, `_is_run`, `_normalize_ace_high`, `_is_run_addon`.
+	- `__play_cards`, `__cards_can_be_joined`, `__clean_up_table` → move into `Table` methods.
+- Add strict game-state invariants in `Game.from_dict`: no duplicate cards across hands/piles/table, card counts sum to expected deck size, and every `card_id` is unique.
+- Add schema validation for external inputs (pydantic/jsonschema) for clearer, faster failure modes on malformed payloads.
+
+### Cleanup & Maintainability — Medium (P2)
+- Replace double-underscore name-mangling with single-underscore attributes and `@property` accessors (`card.id`, `player.hand`) for clarity and to avoid brittle reflection hacks.
+- Prefer Pythonic naming and reduce `get_` boilerplate where appropriate.
+- Consider making `Card` immutable after validated creation, or provide explicit mutation methods that enforce invariants.
+- Add structured logging for server adapters; keep engine I/O-free.
+
+### Testing and CI
+- Add tests for duplicate/overlapping card placements and other invariants (not yet implemented).
+- CI currently runs `pytest`, `ruff`, and captures coverage. Consider adding coverage thresholds and codecov integration.
+
+### Concrete Short-Term Plan (Next 3 tasks)
+1. Add duplicate `card_id` detection to `Game.from_dict` and raise `DuplicateIDError` (P0).
+2. Provide a controlled deserialization API for `Card` (internal factory or `_set_id_for_deserialization`) and remove direct mangled assignments (P0).
+3. Add tests for duplicate IDs and overlapping placements, and ensure CI fails on those cases (P0/P1).
+
+If you'd like, I can implement the duplicate-ID detection and the controlled Card deserialization API now and add tests — shall I proceed with that?

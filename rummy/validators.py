@@ -1,9 +1,8 @@
 import json
-import os
 from pathlib import Path
 from typing import Union
 
-from errors.exceptions import DuplicateIDError, GameStateError
+from .errors.exceptions import DuplicateIDError, GameStateError
 
 
 def _check_card_dict(cd: dict, location: str, seen: set):
@@ -17,7 +16,6 @@ def _check_card_dict(cd: dict, location: str, seen: set):
     seen.add(cid)
 
     st = cd.get('status')
-    # only validate when status is present
     if st is not None:
         if location == 'hand' and st != 'HAND':
             raise GameStateError(f"Card {cid} in hand but status is {st}")
@@ -32,21 +30,12 @@ def _check_card_dict(cd: dict, location: str, seen: set):
 
 
 def validate_snapshot(obj: Union[dict, str, Path]) -> None:
-    """Validate a serialized game snapshot without constructing a Game.
-
-    Accepts either a dict, a JSON string, or a file path to a JSON file.
-
-    Raises `DuplicateIDError` or `GameStateError` on failure.
-    """
     if isinstance(obj, dict):
         d = obj
-        # fall through
     elif isinstance(obj, (str, Path)):
-        # Try parsing as JSON string first (handles both compact and pretty JSON).
         try:
             d = json.loads(str(obj))
         except Exception:
-            # If parsing failed, try treating as a file path and read its contents.
             p = Path(obj)
             if p.exists() and p.is_file():
                 try:
@@ -63,7 +52,6 @@ def validate_snapshot(obj: Union[dict, str, Path]) -> None:
 
     seen = set()
 
-    # players
     players_list = d.get('players', [])
     if not isinstance(players_list, list):
         raise GameStateError("'players' must be a list in snapshot")
@@ -81,7 +69,6 @@ def validate_snapshot(obj: Union[dict, str, Path]) -> None:
         for cd in played:
             _check_card_dict(cd, 'played', seen)
 
-    # piles
     pile_pickup_list = d.get('pile_pickup', [])
     if not isinstance(pile_pickup_list, list):
         raise GameStateError("'pile_pickup' must be a list in snapshot")
@@ -94,7 +81,6 @@ def validate_snapshot(obj: Union[dict, str, Path]) -> None:
     for cd in pile_discard_list:
         _check_card_dict(cd, 'discard', seen)
 
-    # table
     table_obj = d.get('table', {})
     if not isinstance(table_obj, dict):
         raise GameStateError("'table' must be a dict in snapshot")

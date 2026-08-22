@@ -1,7 +1,7 @@
 import pytest
 
-from game import Game
-from errors.exceptions import DuplicateIDError, GameStateError
+from rummy.game import Game
+from rummy.errors.exceptions import DuplicateIDError, GameStateError
 
 
 def test_validate_passes_on_new_game():

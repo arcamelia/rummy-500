@@ -1,9 +1,9 @@
 import json
 import pytest
 
-from game import Game
-from errors.exceptions import DuplicateIDError, GameStateError
-from validators import validate_snapshot
+from rummy.game import Game
+from rummy.errors.exceptions import DuplicateIDError, GameStateError
+from rummy.validators import validate_snapshot
 
 
 def test_validate_snapshot_passes_on_serialized_game():

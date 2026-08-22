@@ -1,8 +1,8 @@
 import pytest
 
-from card import Card, Suit, Rank, CardStatus
-from game import Game
-from errors.exceptions import DuplicateIDError
+from rummy.card import Card, Suit, Rank, CardStatus
+from rummy.game import Game
+from rummy.errors.exceptions import DuplicateIDError
 
 
 def make_game_with_duplicate_card_in_hand_and_pickup():

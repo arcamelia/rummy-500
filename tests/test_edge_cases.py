@@ -1,9 +1,9 @@
 import json
 import pytest
 
-from card import Card, Suit, Rank, CardStatus
-from player import Player
-from game import Game
+from rummy.card import Card, Suit, Rank, CardStatus
+from rummy.player import Player
+from rummy.game import Game
 
 
 def test_card_from_dict_invalid_inputs():
