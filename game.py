@@ -464,14 +464,12 @@ class Game:
         """
         Count up each player's points for the current round and return them in a dict.
         """
-        
         scores = {}
         for p in self.players:
-            cards_played = p.get_table()
-            score = 0
-            for key, cards in cards_played:
-                score += self.__sum_points(cards)
+            cards_played = p.get_played_cards()
+            score = self.__sum_points(list(cards_played))
             scores[p.get_id()] = score
+        return scores
 
     def __sum_points(self, cards: list[Card]) -> int:
         """
