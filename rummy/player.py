@@ -5,50 +5,53 @@ from .errors.exceptions import DeserializationError
 
 class Player:
     def __init__(self, id):
-        self.__id = id
-        self.__hand = []
-        self.__played_cards = []
+        self._id = id
+        self._hand = []
+        self._played_cards = []
 
     def add_to_hand(self, card: Card) -> None:
-        card.update(CardStatus.HAND, self.__id)
-        self.__hand.append(card)
+        card.update(CardStatus.HAND, self._id)
+        self._hand.append(card)
         self.sort_hand()
 
     def rmv_from_hand(self, card: Card, next_status: CardStatus) -> None:
         if next_status == CardStatus.TABLE:
-            next_pid = self.__id
-            self.__played_cards.append(card)
+            next_pid = self._id
+            self._played_cards.append(card)
         elif next_status == CardStatus.PILE_DISCARD:
             next_pid = None
         else:
             raise ValueError("Error removing card from hand: invalid status")
         card.update(next_status, next_pid)
-        self.__hand.remove(card)
+        self._hand.remove(card)
 
     def move_cards_to_played(self, cards: list[Card]) -> None:
         for c in cards:
             self.rmv_from_hand(c, CardStatus.TABLE)
 
     def sort_hand(self) -> None:
-        self.__hand = Card.sort_by_suit_and_rank(self.__hand)
+        self._hand = Card.sort_by_suit_and_rank(self._hand)
 
-    def get_id(self) -> int:
-        return self.__id
+    @property
+    def id(self) -> int:
+        return self._id
 
-    def get_hand(self) -> tuple[Card]:
-        return tuple(self.__hand)
+    @property
+    def hand(self) -> tuple[Card]:
+        return tuple(self._hand)
 
-    def get_played_cards(self) -> tuple[Card]:
-        return tuple(self.__played_cards)
+    @property
+    def played_cards(self) -> tuple[Card]:
+        return tuple(self._played_cards)
 
     def __str__(self) -> str:
-        return f"player {self.__id}: {', '.join(str_list(self.__hand))}"
+        return f"player {self._id}: {', '.join(str_list(self._hand))}"
 
     def to_dict(self) -> dict:
         return {
-            'player_id': self.__id,
-            'hand': [c.to_dict() for c in self.__hand],
-            'played_cards': [c.to_dict() for c in self.__played_cards]
+            'player_id': self._id,
+            'hand': [c.to_dict() for c in self._hand],
+            'played_cards': [c.to_dict() for c in self._played_cards]
         }
 
     @staticmethod
@@ -70,6 +73,6 @@ class Player:
             raise DeserializationError("Player.from_dict: 'played_cards' must be a list")
         for cd in played_list:
             card = Card.from_dict(cd)
-            card.update(CardStatus.TABLE, p.get_id())
-            p._Player__played_cards.append(card)
+            card.update(CardStatus.TABLE, p.id)
+            p._played_cards.append(card)
         return p

@@ -67,7 +67,7 @@ class Game:
             raise IndexError("Discard index out of range")
         chosen_card = self.pile_discard[idx]
 
-        if not self.legal_play_possible_with(player.get_hand(), chosen_card):
+        if not self.legal_play_possible_with(player.hand, chosen_card):
             raise ValueError(f"Chosen card {chosen_card} cannot be used immediately")
 
         add_to_hand = self.pile_discard[idx+1:]
@@ -80,16 +80,16 @@ class Game:
         if not indices:
             chosen_cards = []
         else:
-            chosen_cards = [player.get_hand()[i] for i in indices]
+            chosen_cards = [player.hand[i] for i in indices]
         if reqd_card is not None:
             chosen_cards.append(reqd_card)
 
         return self.__try_play(player, chosen_cards, type_of_play)
 
     def discard(self, player: Player, idx: int) -> Card:
-        if idx < 0 or idx >= len(player.get_hand()):
+        if idx < 0 or idx >= len(player.hand):
             raise IndexError("Hand index out of range")
-        card = player.get_hand()[idx]
+        card = player.hand[idx]
         player.rmv_from_hand(card, CardStatus.PILE_DISCARD)
         self.pile_discard.append(card)
         return card
@@ -146,18 +146,18 @@ class Game:
                 return False
 
     def __legal_one_card_play_r(self, card: Card) -> bool:
-        key_to_find = "R" + str(card.get_suit())
+        key_to_find = "R" + str(card.suit)
         potentials: dict[str,list[Card]] = {}
         for k, v in self.table.items():
             if k.startswith(key_to_find): potentials[k] = v
         for v in potentials.values():
-            consecutive_low_no_ace = Card.consecutive_rank(card, v[0]) and v[0].get_rank() != Rank.ACE
-            consecutive_high_no_ace = Card.consecutive_rank(card, v[-1]) and v[-1].get_rank() != Rank.ACE
+            consecutive_low_no_ace = Card.consecutive_rank(card, v[0]) and v[0].rank != Rank.ACE
+            consecutive_high_no_ace = Card.consecutive_rank(card, v[-1]) and v[-1].rank != Rank.ACE
             if consecutive_low_no_ace or consecutive_high_no_ace: return True
         return False
 
     def __legal_one_card_play_w(self, card: Card) -> bool:
-        key_to_find = "W" + str(card.get_rank())
+        key_to_find = "W" + str(card.rank)
         for k in self.table.keys():
             if k.startswith(key_to_find): return True
         return False
@@ -188,15 +188,15 @@ class Game:
 
     def __cards_can_be_joined(self, cards_1: list[Card], cards_2: list[Card], type_of_play: str) -> bool:
         if type_of_play == "W":
-            return cards_1[0].get_rank() == cards_2[0].get_rank()
-        if cards_1[0].get_suit() != cards_2[0].get_suit():
+            return cards_1[0].rank == cards_2[0].rank
+        if cards_1[0].suit != cards_2[0].suit:
             return False
         high_ace = self.__high_ace(cards_1) or self.__high_ace(cards_2) or self.__high_ace(cards_1 + cards_2)
         amalgamated_cards = Card.sort_by_suit_and_rank(cards_1 + cards_2, high_ace)
-        counter = amalgamated_cards[0].get_rank_value()
+        counter = amalgamated_cards[0].rank_value
         for c in amalgamated_cards:
-            if c.get_rank_value() != counter:
-                if counter == 14 and c.get_rank() == Rank.ACE:
+            if c.rank_value != counter:
+                if counter == 14 and c.rank == Rank.ACE:
                     continue
                 else:
                     return False
@@ -217,29 +217,29 @@ class Game:
     def __high_ace(self, cards: list[Card]):
         if len(cards) == 13 or len(cards) == 1:
             return False
-        ranks = { c.get_rank() for c in cards }
+        ranks = { c.rank for c in cards }
         return Rank.ACE in ranks and Rank.KING in ranks
 
     def __create_key(self, cards: list[Card], type_of_play: str) -> str:
         self.id_counter += 1
         if type_of_play == "R":
-            suit_rank_id = str(cards[0].get_suit())
+            suit_rank_id = str(cards[0].suit)
         else:
-            suit_rank_id = str(cards[0].get_rank())
+            suit_rank_id = str(cards[0].rank)
         return type_of_play + suit_rank_id + str(self.id_counter)
 
     def tally_scores(self) -> dict[int,int]:
         scores = {}
         for p in self.players:
-            cards_played = p.get_played_cards()
+            cards_played = p.played_cards
             score = self.__sum_points(list(cards_played))
-            scores[p.get_id()] = score
+            scores[p.id] = score
         return scores
 
     def __sum_points(self, cards: list[Card]) -> int:
         score = 0
         for c in cards:
-            score += CARD_POINT_VALUES[c.get_rank()]
+            score += CARD_POINT_VALUES[c.rank]
         return score
 
     def __initialize_deck(self) -> list[Card]:
@@ -255,7 +255,7 @@ class Game:
         for p in players:
             for _ in range(NUM_CARDS_PER_PLAYER):
                 card = deck.pop()
-                card.update(CardStatus.HAND, p.get_id())
+                card.update(CardStatus.HAND, p.id)
                 p.add_to_hand(card)
 
     def __initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
@@ -274,7 +274,8 @@ class Game:
         for p in range(num_players):
             self.players.append(Player(p+1))
 
-    def get_players(self) -> list[Player]:
+    @property
+    def players(self) -> list[Player]:
         return list(self.players)
 
     def __str__(self) -> str:
@@ -292,7 +293,7 @@ class Game:
         return s
 
     def to_dict(self) -> dict:
-        players_list = sorted(list(self.players), key=lambda p: p.get_id())
+        players_list = sorted(list(self.players), key=lambda p: p.id)
         return {
             'players': [p.to_dict() for p in players_list],
             'pile_pickup': [c.to_dict() for c in self.pile_pickup],
@@ -328,14 +329,14 @@ class Game:
         g.id_counter = d.get('id_counter', 0)
         seen = set()
         def check_and_add(card: Card):
-            cid = card.get_id()
+            cid = card.id
             if cid in seen:
                 raise DuplicateIDError(f"Duplicate card_id detected during Game.from_dict: {cid}")
             seen.add(cid)
         for p in g.players:
-            for c in p.get_hand():
+            for c in p.hand:
                 check_and_add(c)
-            for c in p.get_played_cards():
+            for c in p.played_cards:
                 check_and_add(c)
         for c in g.pile_pickup:
             check_and_add(c)
@@ -359,12 +360,12 @@ class Game:
         seen = set()
 
         def check_card_location(card: Card, location: str):
-            cid = card.get_id()
+            cid = card.id
             if cid in seen:
                 raise DuplicateIDError(f"Duplicate card_id detected in game state: {cid}")
             seen.add(cid)
 
-            st = card.get_status()
+            st = card.status
             if st is not None:
                 if location == 'hand' and st != CardStatus.HAND:
                     raise GameStateError(f"Card {cid} in hand but status is {st}")
@@ -378,9 +379,9 @@ class Game:
                     raise GameStateError(f"Card {cid} on table but status is {st}")
 
         for p in self.players:
-            for c in p.get_hand():
+            for c in p.hand:
                 check_card_location(c, 'hand')
-            for c in p.get_played_cards():
+            for c in p.played_cards:
                 check_card_location(c, 'played')
 
         for c in self.pile_pickup:
@@ -398,8 +399,8 @@ class GameConsoleAdapter:
         self.game = game
 
     def run_turn_for_player(self, player: Player) -> None:
-        print(f"\n--- Player {player.get_id()}'s Turn ---")
-        print("Your hand:", format_list_of_str(player.get_hand()))
+        print(f"\n--- Player {player.id}'s Turn ---")
+        print("Your hand:", format_list_of_str(player.hand))
         print("Discard pile:", format_list_of_str(self.game.pile_discard))
 
         while True:
@@ -432,14 +433,14 @@ class GameConsoleAdapter:
                     print("Invalid input. Try again.")
                     continue
 
-            print("Your hand:", format_list_of_str(player.get_hand()))
+            print("Your hand:", format_list_of_str(player.hand))
             type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w] ").strip().upper()
             if type_of_play not in ('R', 'W'):
                 print("Invalid input. Try again.")
                 continue
 
             indices_i = input("Choose card indices (0-indexed) from your hand to play (comma-separated): ").strip()
-            indices = self.game._Game__parse_input_to_list_of_indices(indices_i, len(player.get_hand()))
+            indices = self.game._Game__parse_input_to_list_of_indices(indices_i, len(player.hand))
             if indices is None:
                 print("Invalid input. Try again.")
                 continue
@@ -459,7 +460,7 @@ class GameConsoleAdapter:
 
         while True:
             try:
-                print("Your hand:", format_list_of_str(player.get_hand()))
+                print("Your hand:", format_list_of_str(player.hand))
                 idx = int(input("Choose card index to discard (0-indexed): ").strip())
                 card = self.game.discard(player, idx)
                 print(f"You discarded {card}.\n")

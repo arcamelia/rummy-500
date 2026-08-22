@@ -39,8 +39,6 @@ This project has been analyzed for correctness, security, and maintainability. B
 - Add schema validation for external inputs (pydantic/jsonschema) for clearer, faster failure modes on malformed payloads.
 
 ### Cleanup & Maintainability — Medium (P2)
-- Replace double-underscore name-mangling with single-underscore attributes and `@property` accessors (`card.id`, `player.hand`) for clarity and to avoid brittle reflection hacks.
-- Prefer Pythonic naming and reduce `get_` boilerplate where appropriate.
 - Consider making `Card` immutable after validated creation, or provide explicit mutation methods that enforce invariants.
 - Add structured logging for server adapters; keep engine I/O-free.
 

@@ -16,8 +16,8 @@ def test_validate_detects_duplicate_in_memory():
     if not g.pile_pickup or not g.players:
         pytest.skip("not enough cards to craft duplicate")
     card = g.pile_pickup[0]
-    # append same card object to player's hand
-    g.players[0]._Player__hand.append(card)
+    # append same card object to player's hand (reach into player internals)
+    g.players[0]._hand.append(card)
     with pytest.raises((DuplicateIDError, GameStateError)):
         g.validate()
 

@@ -66,7 +66,7 @@ def test_player_hand_immutable_snapshot():
     p = Player(1)
     c = Card(Suit.SPADES, Rank.THREE, None, player=None)
     p.add_to_hand(c)
-    hand = p.get_hand()
+    hand = p.hand
     assert isinstance(hand, tuple)
     with pytest.raises(AttributeError):
         hand.append('x')
@@ -79,7 +79,7 @@ def test_integration_game_json_roundtrip():
     s = json.dumps(gd)
     parsed = json.loads(s)
     g2 = Game.from_dict(parsed)
-    assert len(g.get_players()) == len(g2.get_players())
+    assert len(g.players) == len(g2.players)
     # ensure some card ids preserved
     if g.pile_pickup:
-        assert [c.get_id() for c in g.pile_pickup] == [c.get_id() for c in g2.pile_pickup]
+        assert [c.id for c in g.pile_pickup] == [c.id for c in g2.pile_pickup]

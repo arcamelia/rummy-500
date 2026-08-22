@@ -6,11 +6,11 @@ class Card:
     ACE_HIGH = False
 
     def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None):
-        self.__suit = suit
-        self.__rank = rank
-        self.__status = status
-        self.__player = player
-        self.__id = uuid.uuid4().hex
+        self._suit = suit
+        self._rank = rank
+        self._status = status
+        self._player = player
+        self._id = uuid.uuid4().hex
 
         if player is None and (status == CardStatus.HAND or status == CardStatus.TABLE):
             raise ValueError("player cannot be None when status is HAND or TABLE")
@@ -19,26 +19,26 @@ class Card:
             raise ValueError("player must be None when status is PILE_PICKUP or PILE_DISCARD")
 
     def change_status(self, new_status: 'CardStatus') -> None:
-        if not CardStatus.is_allowed_status_move(self.__status, new_status):
+        if not CardStatus.is_allowed_status_move(self._status, new_status):
             raise ValueError("invalid status transition")
-        self.__status = new_status
+        self._status = new_status
 
     def update(self, new_status: 'CardStatus', new_pid: int = None) -> None:
-        self.__status = new_status
+        self._status = new_status
         if new_status == CardStatus.PILE_PICKUP or new_status == CardStatus.PILE_DISCARD:
-            self.__player = None
+            self._player = None
         elif new_pid is None:
             raise ValueError("player cannot be None when status is HAND or TABLE")
         else:
-            self.__player = new_pid
+            self._player = new_pid
 
     @staticmethod
     def __sort_key(card: 'Card', ace_high: bool) -> tuple[int,int]:
-        if ace_high and card.get_rank() == Rank.ACE:
+        if ace_high and card.rank == Rank.ACE:
             rank_value = 14
         else:
-            rank_value = card.get_rank_value()
-        return (card.get_suit_value(), rank_value)
+            rank_value = card.rank_value
+        return (card.suit_value, rank_value)
 
     @staticmethod
     def sort_by_suit_and_rank(cards: list['Card'], ace_high=False) -> list['Card']:
@@ -46,11 +46,11 @@ class Card:
 
     @staticmethod
     def map_to_rank(cards: list['Card']) -> list[int]:
-        return list(map(Card.get_rank_value, cards))
+        return list(map(lambda c: c.rank_value, cards))
 
     @staticmethod
     def map_to_suit(cards: list['Card']) -> list[int]:
-        return list(map(Card.get_suit_value, cards))
+        return list(map(lambda c: c.suit_value, cards))
 
     @staticmethod
     def contains_ace(cards: list['Card']) -> bool:
@@ -59,56 +59,63 @@ class Card:
 
     @staticmethod
     def same_suit(c1: 'Card', c2: 'Card') -> bool:
-        return c1.get_suit() == c2.get_suit()
+        return c1.suit == c2.suit
 
     @staticmethod
     def consecutive_rank(c1: 'Card', c2: 'Card') -> bool:
-        r1 = c1.get_rank_value()
-        r2 = c2.get_rank_value()
+        r1 = c1.rank_value
+        r2 = c2.rank_value
         return abs(r1-r2) == 1 or abs(r1-r2) == 12
 
-    def get_suit(self) -> 'Suit':
-        return self.__suit
+    @property
+    def suit(self) -> 'Suit':
+        return self._suit
 
-    def get_suit_value(self) -> int:
-        return self.__suit.value
+    @property
+    def suit_value(self) -> int:
+        return self._suit.value
 
-    def get_rank(self) -> 'Rank':
-        return self.__rank
+    @property
+    def rank(self) -> 'Rank':
+        return self._rank
 
-    def get_rank_value(self) -> int:
-        return self.__rank.value
+    @property
+    def rank_value(self) -> int:
+        return self._rank.value
 
-    def get_status(self) -> 'CardStatus':
-        return self.__status
+    @property
+    def status(self) -> 'CardStatus':
+        return self._status
 
-    def get_player(self) -> int:
-        return self.__player
+    @property
+    def player(self) -> int:
+        return self._player
 
-    def get_id(self) -> str:
-        return self.__id
+    @property
+    def id(self) -> str:
+        return self._id
 
     def __str__(self) -> str:
-        return str(self.__rank) + str(self.__suit)
+        return str(self.rank) + str(self.suit)
 
     def __repr__(self) -> str:
-        return f"Card({self.get_suit()},{self.get_rank()},{self.get_status()},{self.get_player()},{self.get_id()})"
+        return f"Card({self.suit},{self.rank},{self.status},{self.player},{self.id})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Card):
             return False
-        return self.__id == other.__id
+        return self._id == other._id
 
     def __hash__(self) -> int:
-        return hash(self.__id)
+        return hash(self._id)
 
     def to_dict(self) -> dict:
         return {
-            'suit': self.get_suit().name if self.get_suit() is not None else None,
-            'rank': self.get_rank().name if self.get_rank() is not None else None,
-            'status': self.get_status().name if self.get_status() is not None else None,
-            'player_id': self.get_player(),
-            'card_id': self.get_id()
+            'suit': self.suit.name if self.suit is not None else None,
+            'rank': self.rank.name if self.rank is not None else None,
+            'status': self.status.name if self.status is not None else None,
+            'player_id': self.player,
+            'card_id': self.id
         }
 
     @staticmethod
@@ -150,7 +157,7 @@ class Card:
     def _set_id_for_deserialization(self, cid: str) -> None:
         if cid is None or not isinstance(cid, str):
             raise DeserializationError("card id must be a non-empty string for deserialization")
-        self.__id = cid
+        self._id = cid
 
 
 class Suit(Enum):
