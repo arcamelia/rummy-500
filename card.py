@@ -8,7 +8,7 @@ class Card:
 
     ACE_HIGH = False
 
-    def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None, id: str = None):
+    def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None):
         """
         Initialize a new `Card` for a game of Rummy 500. 
         """
@@ -17,8 +17,8 @@ class Card:
         self.__rank: Rank = rank
         self.__status: CardStatus = status
         self.__player: int = player
-        # unique identifier for stable equality and hashing; can be provided (from deserialization)
-        self.__id: str = id if id is not None else uuid.uuid4().hex
+        # unique identifier for stable equality and hashing
+        self.__id: str = uuid.uuid4().hex
 
         if player is None and (status == CardStatus.HAND or status == CardStatus.TABLE):
             raise ValueError("player cannot be None when status is HAND or TABLE")
@@ -187,8 +187,8 @@ class Card:
             'suit': self.get_suit().name if self.get_suit() is not None else None,
             'rank': self.get_rank().name if self.get_rank() is not None else None,
             'status': self.get_status().name if self.get_status() is not None else None,
-            'player': self.get_player(),
-            'id': self.get_id()
+            'player_id': self.get_player(),
+            'card_id': self.get_id()
         }
 
     @staticmethod
@@ -197,12 +197,42 @@ class Card:
 
         Expects enum names for `suit`, `rank`, and `status` (or `None`).
         """
-        suit = Suit[d['suit']] if d.get('suit') is not None else None
-        rank = Rank[d['rank']] if d.get('rank') is not None else None
-        status = CardStatus[d['status']] if d.get('status') is not None else None
-        player = d.get('player')
-        cid = d.get('id')
-        return Card(suit=suit, rank=rank, status=status, player=player, id=cid)
+        if not isinstance(d, dict):
+            raise ValueError("Card.from_dict expects a dict")
+
+        suit_name = d.get('suit')
+        rank_name = d.get('rank')
+        status_name = d.get('status')
+        player = d.get('player_id')
+        cid = d.get('card_id')
+
+        try:
+            suit = Suit[suit_name] if suit_name is not None else None
+        except Exception:
+            raise ValueError(f"Invalid suit value in Card.from_dict: {suit_name}")
+
+        try:
+            rank = Rank[rank_name] if rank_name is not None else None
+        except Exception:
+            raise ValueError(f"Invalid rank value in Card.from_dict: {rank_name}")
+
+        try:
+            status = CardStatus[status_name] if status_name is not None else None
+        except Exception:
+            raise ValueError(f"Invalid status value in Card.from_dict: {status_name}")
+
+        # player_id can be None or int
+        if player is not None and not isinstance(player, int):
+            raise ValueError("Card.from_dict: player_id must be an int or None")
+
+        # card_id must be present and a string -- preserve identity across serialization
+        if cid is None or not isinstance(cid, str):
+            raise ValueError("Card.from_dict: card_id is required and must be a string")
+
+        card = Card(suit=suit, rank=rank, status=status, player=player)
+        # restore original id (use name-mangled attribute)
+        card._Card__id = cid
+        return card
 
 
 class Suit(Enum):

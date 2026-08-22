@@ -78,7 +78,7 @@ class Player:
     def to_dict(self) -> dict:
         """Serialize the Player to a dict, including hand and played cards."""
         return {
-            'id': self.__id,
+            'player_id': self.__id,
             'hand': [c.to_dict() for c in self.__hand],
             'played_cards': [c.to_dict() for c in self.__played_cards]
         }
@@ -89,16 +89,30 @@ class Player:
 
         This will create a new `Player` and populate its hand and played cards.
         """
-        p = Player(d['id'])
-        # add hand cards using add_to_hand to keep invariants
-        for cd in d.get('hand', []):
+        if not isinstance(d, dict):
+            raise ValueError("Player.from_dict expects a dict")
+
+        pid = d.get('player_id')
+        if not isinstance(pid, int):
+            raise ValueError("Player.from_dict: player_id must be an int")
+
+        p = Player(pid)
+
+        hand_list = d.get('hand', [])
+        if not isinstance(hand_list, list):
+            raise ValueError("Player.from_dict: 'hand' must be a list")
+        for cd in hand_list:
             card = Card.from_dict(cd)
+            # assign to player's hand (mutator enforces status/player and sorting)
             p.add_to_hand(card)
 
-        # played_cards stored for scoring; append directly to avoid altering status/player
-        for cd in d.get('played_cards', []):
+        played_list = d.get('played_cards', [])
+        if not isinstance(played_list, list):
+            raise ValueError("Player.from_dict: 'played_cards' must be a list")
+        for cd in played_list:
             card = Card.from_dict(cd)
-            # append directly to internal list (from_dict is reconstructing state)
+            # normalize status/player to TABLE for played cards
+            card.update(CardStatus.TABLE, p.get_id())
             p._Player__played_cards.append(card)
 
         return p

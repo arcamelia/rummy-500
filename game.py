@@ -585,19 +585,35 @@ class Game:
 
         This bypasses `Game.__init__` and restores internal structures directly.
         """
+        if not isinstance(d, dict):
+            raise ValueError("Game.from_dict expects a dict")
+
         g = object.__new__(Game)
-        # reconstruct players
-        g.players = set()
-        for pd in d.get('players', []):
+        # reconstruct players as ordered list
+        g.players = []
+        players_list = d.get('players', [])
+        if not isinstance(players_list, list):
+            raise ValueError("Game.from_dict: 'players' must be a list")
+        for pd in players_list:
             p = Player.from_dict(pd)
-            g.players.add(p)
+            g.players.append(p)
 
         # reconstruct piles
-        g.pile_pickup = [Card.from_dict(cd) for cd in d.get('pile_pickup', [])]
-        g.pile_discard = [Card.from_dict(cd) for cd in d.get('pile_discard', [])]
+        pile_pickup_list = d.get('pile_pickup', [])
+        if not isinstance(pile_pickup_list, list):
+            raise ValueError("Game.from_dict: 'pile_pickup' must be a list")
+        g.pile_pickup = [Card.from_dict(cd) for cd in pile_pickup_list]
+
+        pile_discard_list = d.get('pile_discard', [])
+        if not isinstance(pile_discard_list, list):
+            raise ValueError("Game.from_dict: 'pile_discard' must be a list")
+        g.pile_discard = [Card.from_dict(cd) for cd in pile_discard_list]
 
         # reconstruct table
-        g.table = {k: [Card.from_dict(cd) for cd in v] for k, v in d.get('table', {}).items()}
+        table_obj = d.get('table', {})
+        if not isinstance(table_obj, dict):
+            raise ValueError("Game.from_dict: 'table' must be a dict")
+        g.table = {k: [Card.from_dict(cd) for cd in v] for k, v in table_obj.items()}
 
         g.id_counter = d.get('id_counter', 0)
         return g
