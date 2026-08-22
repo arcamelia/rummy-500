@@ -27,7 +27,7 @@ class Game:
     """
     Represents a game of Rummy 500.
     """
-    players: set[Player]            # between 2 - MAX_PLAYERS
+    players: list[Player]            # between 2 - MAX_PLAYERS (ordered)
     pile_pickup: list[Card]         # begins with many cards, but may become 0 at some point
     pile_discard: list[Card]        # always has > 0 cards in it
     table: dict[str,list[Card]]
@@ -65,7 +65,7 @@ class Game:
     """
 
     def __init__(self, num_players):
-        self.players = set()
+        self.players = []
         self.__add_players(num_players)
         deck: list[Card] = self.__initialize_deck()
         self.__deal_cards(deck, self.players)
@@ -531,17 +531,16 @@ class Game:
         """
 
         if num_players > MAX_PLAYERS:
-            # todo: throw error
-            print(f"Maximum number of players is {MAX_PLAYERS}")
-            return
-        
+            raise ValueError(f"Maximum number of players is {MAX_PLAYERS}")
+
         for p in range(num_players):
-            self.players.add(Player(p+1))
+            self.players.append(Player(p+1))
 
     def get_players(self) -> list[Player]:
         """
         Getter for private `players` member.
         """
+        # return a shallow copy to avoid external mutation of internal list
         return list(self.players)
 
     def __str__(self) -> str:

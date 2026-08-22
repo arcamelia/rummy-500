@@ -1,4 +1,5 @@
 from enum import Enum
+import uuid
 
 class Card:
     """
@@ -7,7 +8,7 @@ class Card:
 
     ACE_HIGH = False
 
-    def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None):
+    def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None, id: str = None):
         """
         Initialize a new `Card` for a game of Rummy 500. 
         """
@@ -16,6 +17,8 @@ class Card:
         self.__rank: Rank = rank
         self.__status: CardStatus = status
         self.__player: int = player
+        # unique identifier for stable equality and hashing; can be provided (from deserialization)
+        self.__id: str = id if id is not None else uuid.uuid4().hex
 
         if player is None and (status == CardStatus.HAND or status == CardStatus.TABLE):
             raise ValueError("player cannot be None when status is HAND or TABLE")
@@ -143,12 +146,27 @@ class Card:
         Getter for private `__player` member.
         """
         return self.__player
+
+    def get_id(self) -> str:
+        """Return the unique id for this card instance."""
+        return self.__id
     
     def __str__(self) -> str:
         """
         Override of `str` method for `Card` class.
         """
         return str(self.__rank) + str(self.__suit)
+
+    def __repr__(self) -> str:
+        return f"Card({self.get_suit()},{self.get_rank()},{self.get_status()},{self.get_player()},{self.get_id()})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Card):
+            return False
+        return self.__id == other.__id
+
+    def __hash__(self) -> int:
+        return hash(self.__id)
     
     @staticmethod
     def str_to_card(str: str) -> 'Card':
@@ -169,7 +187,8 @@ class Card:
             'suit': self.get_suit().name if self.get_suit() is not None else None,
             'rank': self.get_rank().name if self.get_rank() is not None else None,
             'status': self.get_status().name if self.get_status() is not None else None,
-            'player': self.get_player()
+            'player': self.get_player(),
+            'id': self.get_id()
         }
 
     @staticmethod
@@ -182,7 +201,8 @@ class Card:
         rank = Rank[d['rank']] if d.get('rank') is not None else None
         status = CardStatus[d['status']] if d.get('status') is not None else None
         player = d.get('player')
-        return Card(suit=suit, rank=rank, status=status, player=player)
+        cid = d.get('id')
+        return Card(suit=suit, rank=rank, status=status, player=player, id=cid)
 
 
 class Suit(Enum):

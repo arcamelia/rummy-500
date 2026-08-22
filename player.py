@@ -56,17 +56,18 @@ class Player:
         """
         return self.__id
     
-    def get_hand(self) -> list[Card]:
+    def get_hand(self) -> tuple[Card]:
         """
         Getter for private `__hand` member.
         """
-        return self.__hand
+        # return an immutable snapshot to avoid external mutation
+        return tuple(self.__hand)
     
-    def get_played_cards(self) -> list[Card]:
+    def get_played_cards(self) -> tuple[Card]:
         """
         Getter for private `__played_cards` member.
         """
-        return self.__played_cards
+        return tuple(self.__played_cards)
     
     def __str__(self) -> str:
         """
@@ -97,7 +98,8 @@ class Player:
         # played_cards stored for scoring; append directly to avoid altering status/player
         for cd in d.get('played_cards', []):
             card = Card.from_dict(cd)
-            p.get_played_cards().append(card)
+            # append directly to internal list (from_dict is reconstructing state)
+            p._Player__played_cards.append(card)
 
         return p
 
