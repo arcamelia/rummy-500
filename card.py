@@ -159,6 +159,31 @@ class Card:
         suit = Suit.str_to_suit(str[1])
         return Card(suit, rank, None)
 
+    def to_dict(self) -> dict:
+        """Serialize the Card to a JSON-serializable dict.
+
+        Enums are represented by their `name` so they can be reconstructed with
+        `Suit[...], Rank[...]` and `CardStatus[...]`.
+        """
+        return {
+            'suit': self.get_suit().name if self.get_suit() is not None else None,
+            'rank': self.get_rank().name if self.get_rank() is not None else None,
+            'status': self.get_status().name if self.get_status() is not None else None,
+            'player': self.get_player()
+        }
+
+    @staticmethod
+    def from_dict(d: dict) -> 'Card':
+        """Reconstruct a Card from a dict produced by `to_dict`.
+
+        Expects enum names for `suit`, `rank`, and `status` (or `None`).
+        """
+        suit = Suit[d['suit']] if d.get('suit') is not None else None
+        rank = Rank[d['rank']] if d.get('rank') is not None else None
+        status = CardStatus[d['status']] if d.get('status') is not None else None
+        player = d.get('player')
+        return Card(suit=suit, rank=rank, status=status, player=player)
+
 
 class Suit(Enum):
     CLUBS = 1

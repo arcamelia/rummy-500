@@ -74,3 +74,30 @@ class Player:
         """
         return f"player {self.__id}: {', '.join(str_list(self.__hand))}"
 
+    def to_dict(self) -> dict:
+        """Serialize the Player to a dict, including hand and played cards."""
+        return {
+            'id': self.__id,
+            'hand': [c.to_dict() for c in self.__hand],
+            'played_cards': [c.to_dict() for c in self.__played_cards]
+        }
+
+    @staticmethod
+    def from_dict(d: dict) -> 'Player':
+        """Reconstruct a Player from a dict produced by `to_dict`.
+
+        This will create a new `Player` and populate its hand and played cards.
+        """
+        p = Player(d['id'])
+        # add hand cards using add_to_hand to keep invariants
+        for cd in d.get('hand', []):
+            card = Card.from_dict(cd)
+            p.add_to_hand(card)
+
+        # played_cards stored for scoring; append directly to avoid altering status/player
+        for cd in d.get('played_cards', []):
+            card = Card.from_dict(cd)
+            p.get_played_cards().append(card)
+
+        return p
+

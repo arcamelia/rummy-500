@@ -565,6 +565,44 @@ class Game:
         s += "}"
         return s
 
+    def to_dict(self) -> dict:
+        """Serialize game state to a JSON-serializable dict.
+
+        - Players are serialized as a list (sorted by id for determinism).
+        - Piles and table contain serialized cards.
+        """
+        players_list = sorted(list(self.players), key=lambda p: p.get_id())
+        return {
+            'players': [p.to_dict() for p in players_list],
+            'pile_pickup': [c.to_dict() for c in self.pile_pickup],
+            'pile_discard': [c.to_dict() for c in self.pile_discard],
+            'table': {k: [c.to_dict() for c in v] for k, v in self.table.items()},
+            'id_counter': self.id_counter
+        }
+
+    @staticmethod
+    def from_dict(d: dict) -> 'Game':
+        """Reconstruct a Game from a dict produced by `to_dict`.
+
+        This bypasses `Game.__init__` and restores internal structures directly.
+        """
+        g = object.__new__(Game)
+        # reconstruct players
+        g.players = set()
+        for pd in d.get('players', []):
+            p = Player.from_dict(pd)
+            g.players.add(p)
+
+        # reconstruct piles
+        g.pile_pickup = [Card.from_dict(cd) for cd in d.get('pile_pickup', [])]
+        g.pile_discard = [Card.from_dict(cd) for cd in d.get('pile_discard', [])]
+
+        # reconstruct table
+        g.table = {k: [Card.from_dict(cd) for cd in v] for k, v in d.get('table', {}).items()}
+
+        g.id_counter = d.get('id_counter', 0)
+        return g
+
 
 class GameConsoleAdapter:
     """Thin console adapter that uses `Game` engine methods for interactive play.
