@@ -3,6 +3,9 @@ import uuid
 from .errors.exceptions import DeserializationError
 
 class Card:
+    """
+    Represents a card during a game of Rummy 500.
+    """
     ACE_HIGH = False
 
     def __init__(self, suit: 'Suit', rank: 'Rank', status: 'CardStatus', player: int = None):
@@ -18,12 +21,19 @@ class Card:
         if player is not None and (status == CardStatus.PILE_PICKUP or status == CardStatus.PILE_DISCARD):
             raise ValueError("player must be None when status is PILE_PICKUP or PILE_DISCARD")
 
+    # TODO: review change_status and update methods - when are they are needed?
     def change_status(self, new_status: 'CardStatus') -> None:
+        """
+        Change the current card status to a new status, if it is allowed.
+        """
         if not CardStatus.is_allowed_status_move(self._status, new_status):
             raise ValueError("invalid status transition")
         self._status = new_status
 
     def update(self, new_status: 'CardStatus', new_pid: int = None) -> None:
+        """
+        TODO: `update` docstring
+        """
         self._status = new_status
         if new_status == CardStatus.PILE_PICKUP or new_status == CardStatus.PILE_DISCARD:
             self._player = None
@@ -34,6 +44,9 @@ class Card:
 
     @staticmethod
     def __sort_key(card: 'Card', ace_high: bool) -> tuple[int,int]:
+        """
+        Key function for sorting cards by suit and then by rank
+        """
         if ace_high and card.rank == Rank.ACE:
             rank_value = 14
         else:
@@ -42,27 +55,47 @@ class Card:
 
     @staticmethod
     def sort_by_suit_and_rank(cards: list['Card'], ace_high=False) -> list['Card']:
+        """
+        Sort a list of cards by suit and then by rank.
+        \nOrder of suits: C, D, S, H
+        \nOrder of ranks: A, 2, 3, ..., J, Q, K (or A high if specified)
+        """
         return sorted(cards, key=lambda card: Card.__sort_key(card, ace_high))
 
     @staticmethod
     def map_to_rank(cards: list['Card']) -> list[int]:
-        return list(map(lambda c: c.rank_value, cards))
+        """
+        Convert a list of cards into a list of those cards' ranks.
+        """
+        return list(map(Card.get_rank_value, cards))
 
     @staticmethod
     def map_to_suit(cards: list['Card']) -> list[int]:
-        return list(map(lambda c: c.suit_value, cards))
+        """
+        Convert a list of cards into a list of those cards' suits.
+        """
+        return list(map(Card.get_suit_value, cards))
 
     @staticmethod
     def contains_ace(cards: list['Card']) -> bool:
+        """
+        Return true if given list of cards contains an ace.
+        """
         ranks = Card.map_to_rank(cards)
         return Rank.ACE.value in ranks
 
     @staticmethod
     def same_suit(c1: 'Card', c2: 'Card') -> bool:
+        """
+        Return true if two cards are the same suit.
+        """
         return c1.suit == c2.suit
 
     @staticmethod
     def consecutive_rank(c1: 'Card', c2: 'Card') -> bool:
+        """
+        Return true if two cards have consecutive rank.
+        """
         r1 = c1.rank_value
         r2 = c2.rank_value
         return abs(r1-r2) == 1 or abs(r1-r2) == 12
@@ -179,6 +212,9 @@ class Suit(Enum):
 
     @staticmethod
     def str_to_suit(str: str) -> 'Suit':
+        """
+        Convert the string representation of a suit into a `Suit`.
+        """
         match str:
             case "C":
                 return Suit.CLUBS
@@ -222,6 +258,9 @@ class Rank(Enum):
 
     @staticmethod
     def str_to_rank(str: str) -> 'Rank':
+        """
+        Convert the string representation of a rank into a `Rank`.
+        """
         match str:
             case "A":
                 return Rank.ACE
@@ -236,6 +275,23 @@ class Rank(Enum):
 
 
 class CardStatus(Enum):
+    """
+    There are 4 possible statuses for a card during game play. Every card must 
+    be in exactly one of these statuses. They are as follows:
+
+        PILE_PICKUP: in the pile of pickup cards (position important)
+        PILE_DISCARD: in the discard pile (position important)
+        HAND: in one of the players' hands (player important)
+        TABLE: someone has played the card on the table (player important)
+
+    Cards either start in PILE_PICKUP or HAND status. The possible
+    moves between statuses are:
+
+        PILE_PICKUP -> HAND, PILE_PICKUP
+        PILE_DISCARD -> HAND, PILE_DISCARD
+        HAND -> PILE_DISCARD, TABLE, HAND
+        TABLE -> TABLE
+    """
     PILE_PICKUP = 1
     PILE_DISCARD = 2
     HAND = 3

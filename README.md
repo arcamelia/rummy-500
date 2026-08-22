@@ -45,10 +45,3 @@ This project has been analyzed for correctness, security, and maintainability. B
 ### Testing and CI
 - Add tests for duplicate/overlapping card placements and other invariants (not yet implemented).
 - CI currently runs `pytest`, `ruff`, and captures coverage. Consider adding coverage thresholds and codecov integration.
-
-### Concrete Short-Term Plan (Next 3 tasks)
-1. Add duplicate `card_id` detection to `Game.from_dict` and raise `DuplicateIDError` (P0).
-2. Provide a controlled deserialization API for `Card` (internal factory or `_set_id_for_deserialization`) and remove direct mangled assignments (P0).
-3. Add tests for duplicate IDs and overlapping placements, and ensure CI fails on those cases (P0/P1).
-
-If you'd like, I can implement the duplicate-ID detection and the controlled Card deserialization API now and add tests — shall I proceed with that?

@@ -3,7 +3,7 @@ from .player import Player
 from .utils import str_list, format_list_of_str
 import random
 import itertools
-from typing import Callable
+from typing import overload
 from .errors.exceptions import DuplicateIDError, GameStateError
 
 MAX_PLAYERS = 7
@@ -35,6 +35,37 @@ class Game:
     table: dict[str,list[Card]]
     id_counter: int
 
+    """
+    Some notes on the table:
+
+    * key formation:
+        - prefix character of R (run) or W (wreck)
+        - for a R, the second character indicates what suit it is
+        - for a W, the second character indicates what rank it is
+        - the integer at the end indicates the order of play, and is unique to that sequence (
+            determined by `self.id_counter`)
+
+        when a player plays the 5H, it will be added to the front of RH5.
+        however, when the 9H is played, it could be placed either at the front of RH3 or the 
+        end of RH5. we will resolve this by combining the two lists together as RH3, and 
+        removing RH5 from the map (we arbitrarily choose to keep the run that was played first).
+    
+    * the list values of each entry in the dict MUST BE KEPT IN SORTED ORDER
+
+    * each player will keep track of the cards that they specifically have played, so it's not required
+      for the central table to know who played what
+
+    e.g. table = {
+        RC1: [3C, 4C, 5C],
+        WA2: [AC, AD, AS],
+        RH3: [10H, JH, QH, KH, AH],
+        RS4: [8S, 9S, 10S],
+        RH5: [6H, 7H, 8H],
+        W36: [3D, 3S, 3H]
+    }
+
+    """
+
     def __init__(self, num_players):
         self.players = []
         self.__add_players(num_players)
@@ -55,14 +86,22 @@ class Game:
 
     #################### Engine action methods (UI-agnostic) ####################
     
-    def pickup_from_pickup(self, player: Player) -> Card:
+    @overload
+    def pickup(self, player: Player) -> Card:
+        """
+        Phase **pickup** (PICKUP PILE) of a player's turn
+        """
         if not self.pile_pickup:
             raise IndexError("Pickup pile is empty")
         card = self.pile_pickup.pop()
         player.add_to_hand(card)
         return card
 
-    def pickup_from_discard(self, player: Player, idx: int) -> Card:
+    @overload
+    def pickup(self, player: Player, idx: int) -> Card:
+        """
+        Phase **pickup** (DISCARD PILE) of a player's turn
+        """
         if idx < 0 or idx >= len(self.pile_discard):
             raise IndexError("Discard index out of range")
         chosen_card = self.pile_discard[idx]
@@ -77,6 +116,9 @@ class Game:
         return chosen_card
 
     def play(self, player: Player, indices: list[int], type_of_play: str, reqd_card: Card | None = None) -> bool:
+        """
+        Phase **play** of a player's turn
+        """
         if not indices:
             chosen_cards = []
         else:
@@ -87,6 +129,9 @@ class Game:
         return self.__try_play(player, chosen_cards, type_of_play)
 
     def discard(self, player: Player, idx: int) -> Card:
+        """
+        Phase **discard** of a player's turn
+        """
         if idx < 0 or idx >= len(player.hand):
             raise IndexError("Hand index out of range")
         card = player.hand[idx]
@@ -95,9 +140,27 @@ class Game:
         return card
 
     def check_rummy(self, cards: list[Card]) -> bool:
+        """
+        Return true if the given cards are in the discard pile and are involved in a rummy.
+        """
         return {c in self.pile_discard for c in cards} and self.legal_play_any(cards)
 
     def legal_play_spec(self, cards: list[Card], type_of_play: str) -> bool:
+        """
+        Return `True` if given list of cards can form a legal play based on the specified type (could be a 
+        *R* [`type_of_play="R"`] or a *W* [`type_of_play="W"`]).
+
+        If the value of `type_of_play` does not match the type of play that can be legally formed, 
+        the method will return `False` (i.e., responsibility is on the caller to ensure the type of play 
+        is classified correctly).
+        
+        **CONSTRAINT:** Method will only return `True` if all cards in given list encompass a 
+        singular play.
+        
+        For example, if the list of cards looks like `[2H, 2D, 2S, JH, QH, KH]`, the method 
+        will return `False`, as these two plays should be made separately (even though the two
+        plays are legal on their own).
+        """
         if len(cards) < 3: return self.__legal_play_addon(cards, type_of_play)
 
         ranks = Card.map_to_rank(cards)
@@ -116,9 +179,16 @@ class Game:
         return same_suit and consecutive_rank and type_of_play == "R"
 
     def legal_play_any(self, cards: list[Card]) -> bool:
+        """
+        Return true if given cards can be played legally as a run OR a wreck.
+        """
         return self.legal_play_spec(cards, "R") or self.legal_play_spec(cards, "W")
 
     def legal_play_possible_with(self, aux: list[Card], required_card: Card) -> bool:
+        """
+        Return `True` if `required_card` can be legally played in conjunction with 0 or 
+        more of the cards contained in `aux` (the auxiliary card list).
+        """
         if self.legal_play_any([required_card]):
             return True
         for num_extra_cards in range(4):
@@ -129,6 +199,12 @@ class Game:
         return False
 
     def __legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
+        """
+        Return true iff all cards in given list can be added on to existing plays on the table AND 
+        is classified under the correct type of play (`"R"` or `"W"`).
+        
+        This method should only be called on lists with `len < 3`.
+        """
         match len(cards):
             case 1:
                 return (
@@ -146,6 +222,9 @@ class Game:
                 return False
 
     def __legal_one_card_play_r(self, card: Card) -> bool:
+        """
+        Return true if given card can be played on an existing *R*.
+        """
         key_to_find = "R" + str(card.suit)
         potentials: dict[str,list[Card]] = {}
         for k, v in self.table.items():
@@ -157,18 +236,33 @@ class Game:
         return False
 
     def __legal_one_card_play_w(self, card: Card) -> bool:
+        """
+        Return true if given card can be played on an existing *W*.
+        """
         key_to_find = "W" + str(card.rank)
         for k in self.table.keys():
             if k.startswith(key_to_find): return True
         return False
 
     def __try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
+        """
+        Return `True` if given cards form a legal play, and are properly added to the table 
+        & removed from given player's hand.
+        """
         if not self.legal_play_spec(cards, type_of_play):
             return False
         self.__play_cards(player, cards, type_of_play)
         return True
 
     def __play_cards(self, player: Player, cards: list[Card], type_of_play: str) -> None:
+        """
+        Encompasses all behaviour that occurs when a player moves 1 or more cards 
+        from their hand onto the table as points.
+
+        Return `True` if cards are successfully played.
+
+        **CONSTRAINT**: `type_of_play = "R" | "W"`, cards have already been tested for validity
+        """
         player.move_cards_to_played(cards)
         play_key = self.__find_play_match(cards, type_of_play)
         if play_key == None:
@@ -180,6 +274,12 @@ class Game:
         self.__clean_up_table()
 
     def __find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
+        """
+        Find a list of cards on the table, if one exists, that param cards can be added to. 
+        Return the key of matching list if successful, otherwise return `None`.
+
+        Arbitrarily return the first play match found if more than one exists.
+        """
         filtered_table = { k: v for k, v in self.table.items() if k.startswith(type_of_play) }
         for k, v in filtered_table.items():
             if self.__cards_can_be_joined(v, cards, type_of_play):
@@ -187,6 +287,11 @@ class Game:
         return None
 
     def __cards_can_be_joined(self, cards_1: list[Card], cards_2: list[Card], type_of_play: str) -> bool:
+        """
+        Return `True` if two lists of cards can be joined, based on the `type_of_play`.
+
+        **CONSTRAINT**: neither list can be empty, one of the lists must contain at least 3 cards
+        """
         if type_of_play == "W":
             return cards_1[0].rank == cards_2[0].rank
         if cards_1[0].suit != cards_2[0].suit:
@@ -204,6 +309,9 @@ class Game:
         return True
 
     def __clean_up_table(self):
+        """
+        Join any runs together in `self.table` that are connected.
+        """
         to_rmv = []
         for k1, v1 in self.table.items():
             for k2, v2 in self.table.items():
@@ -215,12 +323,34 @@ class Game:
             self.table.pop(k)
     
     def __high_ace(self, cards: list[Card]):
+        """
+        Return `True` if there is an ace in the list of cards that should be represented 
+        as a high card (a rank value of 14 instead of the default 1).
+
+        - If there is only one card in the list and it is an ace, `False` will be returned.
+        - If all 13 cards from the suit are in the list, `False` will be returned.
+
+        **CONSTRAINT**: This method should only be called on a list of cards of the same 
+        suit. The method will not validate this constraint is upheld.
+        """
         if len(cards) == 13 or len(cards) == 1:
             return False
         ranks = { c.rank for c in cards }
         return Rank.ACE in ranks and Rank.KING in ranks
 
     def __create_key(self, cards: list[Card], type_of_play: str) -> str:
+        """
+        Return a new, unique key for given list of cards to be played on the table.
+
+        key formation:
+        - prefix character of R (run) or W (wreck)
+        - for a R, the second character indicates what suit it is
+        - for a W, the second character indicates what rank it is
+        - the integer at the end indicates the order of play, and is unique to that sequence 
+        (note though, that the integers are not necessarily consecutive)
+            - e.g., RH8 was started after W35, but there need not be keys XX6, XX7 in between 
+            (which could occur if runs were joined)
+        """
         self.id_counter += 1
         if type_of_play == "R":
             suit_rank_id = str(cards[0].suit)
@@ -229,6 +359,9 @@ class Game:
         return type_of_play + suit_rank_id + str(self.id_counter)
 
     def tally_scores(self) -> dict[int,int]:
+        """
+        Count up each player's points for the current round and return them in a dict.
+        """
         scores = {}
         for p in self.players:
             cards_played = p.played_cards
@@ -237,12 +370,18 @@ class Game:
         return scores
 
     def __sum_points(self, cards: list[Card]) -> int:
+        """
+        Return the total point value of all the cards in given list.
+        """
         score = 0
         for c in cards:
             score += CARD_POINT_VALUES[c.rank]
         return score
 
     def __initialize_deck(self) -> list[Card]:
+        """
+        Initialize and return a new deck of shuffled cards.
+        """
         deck: list[Card] = []
         for s in Suit:
             for r in Rank:
@@ -252,6 +391,9 @@ class Game:
         return deck
 
     def __deal_cards(self, deck: list[Card], players: list[Player]) -> None:
+        """
+        Deal out `NUM_CARDS_PER_PLAYER` to the given players.
+        """
         for p in players:
             for _ in range(NUM_CARDS_PER_PLAYER):
                 card = deck.pop()
@@ -259,16 +401,25 @@ class Game:
                 p.add_to_hand(card)
 
     def __initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
+        """
+        Return a list of cards representing the discard pile.
+        """
         c = deck.pop()
         c.update(CardStatus.PILE_DISCARD)
         return [ c, deck.pop(), deck.pop() ]
 
     def __initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
+        """
+        Return a list of cards representing the pickup pile.
+        """
         for card in deck:
             card.update(CardStatus.PILE_PICKUP)
         return deck
 
     def __add_players(self, num_players: int) -> None:
+        """
+        Create and add the given number of players to the game (all with unique id).
+        """
         if num_players > MAX_PLAYERS:
             raise ValueError(f"Maximum number of players is {MAX_PLAYERS}")
         for p in range(num_players):
@@ -284,6 +435,9 @@ class Game:
         return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.pile_discard)}\npickup pile: {format_list_of_str(self.pile_pickup)}"
 
     def stringify_table(self) -> str:
+        """
+        Return a string representation of `self.table`.
+        """
         s = "{\n"
         for key, value in self.table.items():
             s += '\t' + str(key) + ": "
@@ -293,7 +447,10 @@ class Game:
         return s
 
     def to_dict(self) -> dict:
-        players_list = sorted(list(self.players), key=lambda p: p.id)
+        """
+        TODO: `to_dict` docstring
+        """
+        players_list = sorted(self.players, key=lambda p: p.id)
         return {
             'players': [p.to_dict() for p in players_list],
             'pile_pickup': [c.to_dict() for c in self.pile_pickup],
@@ -304,6 +461,9 @@ class Game:
 
     @staticmethod
     def from_dict(d: dict) -> 'Game':
+        """
+        TODO: `from_dict` docstring
+        """
         if not isinstance(d, dict):
             raise ValueError("Game.from_dict expects a dict")
         g = object.__new__(Game)
@@ -393,78 +553,3 @@ class Game:
             for c in v:
                 check_card_location(c, 'table')
 
-
-class GameConsoleAdapter:
-    def __init__(self, game: Game):
-        self.game = game
-
-    def run_turn_for_player(self, player: Player) -> None:
-        print(f"\n--- Player {player.id}'s Turn ---")
-        print("Your hand:", format_list_of_str(player.hand))
-        print("Discard pile:", format_list_of_str(self.game.pile_discard))
-
-        while True:
-            choice = input("Draw from (p)ickup or (d)iscard pile? [p/d] ").strip().lower()
-            if choice == 'd':
-                try:
-                    idx = int(input("Choose card index to pick up from (0-indexed): ").strip())
-                    reqd_card = self.game.pickup_from_discard(player, idx)
-                    break
-                except Exception as e:
-                    print("Invalid pickup from discard:", e)
-                    continue
-            elif choice == 'p':
-                try:
-                    reqd_card = None
-                    self.game.pickup_from_pickup(player)
-                    break
-                except Exception as e:
-                    print("Invalid pickup from pickup pile:", e)
-                    continue
-            else:
-                print("Invalid input.")
-
-        while True:
-            if reqd_card is None:
-                choice = input("Do you want to play any cards? [y/n] ").strip().lower()
-                if choice == 'n':
-                    break
-                if choice != 'y':
-                    print("Invalid input. Try again.")
-                    continue
-
-            print("Your hand:", format_list_of_str(player.hand))
-            type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w] ").strip().upper()
-            if type_of_play not in ('R', 'W'):
-                print("Invalid input. Try again.")
-                continue
-
-            indices_i = input("Choose card indices (0-indexed) from your hand to play (comma-separated): ").strip()
-            indices = self.game._Game__parse_input_to_list_of_indices(indices_i, len(player.hand))
-            if indices is None:
-                print("Invalid input. Try again.")
-                continue
-
-            success = self.game.play(player, indices, type_of_play, reqd_card)
-            if success:
-                reqd_card = None
-                print("Play successful.")
-                print("Updated table:\n", self.game.stringify_table())
-            else:
-                print("Invalid play. Try again.")
-                continue
-
-            more = input("Play more? [y/n] ").strip().lower()
-            if more != 'y':
-                break
-
-        while True:
-            try:
-                print("Your hand:", format_list_of_str(player.hand))
-                idx = int(input("Choose card index to discard (0-indexed): ").strip())
-                card = self.game.discard(player, idx)
-                print(f"You discarded {card}.\n")
-                break
-            except Exception as e:
-                print("Invalid discard:", e)
-                continue

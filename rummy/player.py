@@ -10,11 +10,18 @@ class Player:
         self._played_cards = []
 
     def add_to_hand(self, card: Card) -> None:
+        """
+        Add given card to this player's hand in sorted order.
+        """
         card.update(CardStatus.HAND, self._id)
         self._hand.append(card)
         self.sort_hand()
 
     def rmv_from_hand(self, card: Card, next_status: CardStatus) -> None:
+        """
+        Remove given card from this player's hand and mark it as in either PILE_DISCARD 
+        or TABLE status.
+        """
         if next_status == CardStatus.TABLE:
             next_pid = self._id
             self._played_cards.append(card)
@@ -26,10 +33,17 @@ class Player:
         self._hand.remove(card)
 
     def move_cards_to_played(self, cards: list[Card]) -> None:
+        """
+        Play given cards out of this player's hand. Only handles player functionality 
+        (doesn't record cards on the table in the `Game`).
+        """
         for c in cards:
             self.rmv_from_hand(c, CardStatus.TABLE)
 
     def sort_hand(self) -> None:
+        """
+        Sort this player's hand of cards.
+        """
         self._hand = Card.sort_by_suit_and_rank(self._hand)
 
     @property
