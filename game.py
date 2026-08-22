@@ -5,6 +5,7 @@ import random
 import itertools
 from typing import Callable
 from errors.exceptions import DuplicateIDError
+from errors.exceptions import GameStateError
 
 MAX_PLAYERS = 7
 NUM_CARDS_PER_PLAYER = 7
@@ -125,7 +126,8 @@ class Game:
         """
         raise NotImplementedError("__run_discard_phase is UI-specific; use discard() engine method instead")
 
-    # ------------------ Engine action methods (UI-agnostic) ------------------
+    #################### Engine action methods (UI-agnostic) ####################
+    
     def pickup_from_pickup(self, player: Player) -> Card:
         """Draw the top card from the pickup pile into the player's hand."""
         if not self.pile_pickup:
@@ -640,6 +642,61 @@ class Game:
                 check_and_add(c)
 
         return g
+
+    def validate(self) -> None:
+        """Validate game invariants in-memory.
+
+        Checks performed:
+        - No duplicate `card_id` values across players' hands, played_cards, piles, and table.
+        - Card `status` values are consistent with their location (HAND/TABLE/PILE_*).
+
+        Raises `DuplicateIDError` or `GameStateError` on failure.
+        """
+        from card import CardStatus
+
+        seen = set()
+
+        def check_card_location(card: Card, location: str):
+            cid = card.get_id()
+            if cid in seen:
+                raise DuplicateIDError(f"Duplicate card_id detected in game state: {cid}")
+            seen.add(cid)
+
+            # validate status matches location when status is present
+            st = card.get_status()
+            if st is not None:
+                if location == 'hand' and st != CardStatus.HAND:
+                    raise GameStateError(f"Card {cid} in hand but status is {st}")
+                if location == 'played' and st != CardStatus.TABLE:
+                    raise GameStateError(f"Card {cid} in played_cards but status is {st}")
+                if location == 'pickup' and st != CardStatus.PILE_PICKUP:
+                    raise GameStateError(f"Card {cid} in pile_pickup but status is {st}")
+                if location == 'discard' and st != CardStatus.PILE_DISCARD:
+                    raise GameStateError(f"Card {cid} in pile_discard but status is {st}")
+                if location == 'table' and st != CardStatus.TABLE:
+                    raise GameStateError(f"Card {cid} on table but status is {st}")
+
+        # players
+        for p in self.players:
+            for c in p.get_hand():
+                check_card_location(c, 'hand')
+            for c in p.get_played_cards():
+                check_card_location(c, 'played')
+
+        # piles
+        for c in self.pile_pickup:
+            check_card_location(c, 'pickup')
+        for c in self.pile_discard:
+            check_card_location(c, 'discard')
+
+        # table
+        for k, v in self.table.items():
+            for c in v:
+                check_card_location(c, 'table')
+
+        # note: full-deck checks were intentionally removed; validate focuses on
+        # duplicates and status/location consistency. Full-deck validation can be
+        # implemented externally if needed.
 
 
 class GameConsoleAdapter:
