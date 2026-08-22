@@ -53,15 +53,6 @@ class Game:
     def run_turn_for_player(self, player: Player) -> None:
         raise NotImplementedError("run_turn_for_player is UI-specific; use GameConsoleAdapter for interactive play")
 
-    def __run_pickup_phase(self, player: Player) -> None | Card:
-        raise NotImplementedError("__run_pickup_phase is UI-specific; use pickup_from_pickup or pickup_from_discard instead")
-
-    def __run_play_phase(self, player: Player, reqd_card: Card = None) -> None:
-        raise NotImplementedError("__run_play_phase is UI-specific; use play() engine method instead")
-
-    def __run_discard_phase(self, player: Player) -> None:
-        raise NotImplementedError("__run_discard_phase is UI-specific; use discard() engine method instead")
-
     #################### Engine action methods (UI-agnostic) ####################
     
     def pickup_from_pickup(self, player: Player) -> Card:
@@ -171,9 +162,6 @@ class Game:
             if k.startswith(key_to_find): return True
         return False
 
-    def __prompt_and_play(self, player: Player, reqd_card: Card | None = None, allow_skip: bool = True) -> None:
-        raise NotImplementedError("__prompt_and_play is UI-specific; use play() engine method instead")
-
     def __try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
         if not self.legal_play_spec(cards, type_of_play):
             return False
@@ -190,17 +178,6 @@ class Game:
             old_play_list = self.table[play_key]
             self.table[play_key] = Card.sort_by_suit_and_rank(old_play_list + cards)
         self.__clean_up_table()
-
-    def __parse_input_to_list_of_indices(self, input: str, max: int) -> list[int] | None:
-        if not input:
-            return []
-        try:
-            indices = [int(x) for x in input.split(",")]
-        except ValueError:
-            return None
-        if any(i < 0 or i >= max for i in indices):
-            return None
-        return indices
 
     def __find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
         filtered_table = { k: v for k, v in self.table.items() if k.startswith(type_of_play) }
