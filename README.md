@@ -30,11 +30,6 @@ python3 -m py_compile card.py player.py game.py
 
 This project has been analyzed for correctness, security, and maintainability. Below is a prioritized list of issues, explanations, and concrete fixes to guide refactors and future work.
 
-### Top Risks — Do First (P0) - Harden deserialization and identity preservation
-- Ensure `card_id` is required and a string in `Card.from_dict()` (implemented).
-- Detect duplicate `card_id` values during `Game.from_dict()` and reject invalid game snapshots (add `DuplicateIDError` / `DeserializationError`).
-- Avoid ad-hoc name-mangling assignments like `card._Card__id = cid`; provide an internal API such as `Card._set_id_for_deserialization(cid)` or `Card._from_serialized(...)`.
-
 ### Important Correctness & Design Issues — Do Soon (P1)
 - Table representation is brittle: it encodes play metadata in string keys (e.g., `RH3`). Introduce `Play` (dataclass) and `Table` manager classes, and move table logic (find match, join plays, cleanup) there.
 - Break up large methods into smaller helpers to improve readability and testability:
