@@ -1,5 +1,6 @@
 from enum import Enum
 import uuid
+from errors.exceptions import DeserializationError
 
 class Card:
     """
@@ -198,7 +199,7 @@ class Card:
         Expects enum names for `suit`, `rank`, and `status` (or `None`).
         """
         if not isinstance(d, dict):
-            raise ValueError("Card.from_dict expects a dict")
+            raise DeserializationError("Card.from_dict expects a dict")
 
         suit_name = d.get('suit')
         rank_name = d.get('rank')
@@ -209,25 +210,25 @@ class Card:
         try:
             suit = Suit[suit_name] if suit_name is not None else None
         except Exception:
-            raise ValueError(f"Invalid suit value in Card.from_dict: {suit_name}")
+            raise DeserializationError(f"Invalid suit value in Card.from_dict: {suit_name}")
 
         try:
             rank = Rank[rank_name] if rank_name is not None else None
         except Exception:
-            raise ValueError(f"Invalid rank value in Card.from_dict: {rank_name}")
+            raise DeserializationError(f"Invalid rank value in Card.from_dict: {rank_name}")
 
         try:
             status = CardStatus[status_name] if status_name is not None else None
         except Exception:
-            raise ValueError(f"Invalid status value in Card.from_dict: {status_name}")
+            raise DeserializationError(f"Invalid status value in Card.from_dict: {status_name}")
 
         # player_id can be None or int
         if player is not None and not isinstance(player, int):
-            raise ValueError("Card.from_dict: player_id must be an int or None")
+            raise DeserializationError("Card.from_dict: player_id must be an int or None")
 
         # card_id must be present and a string -- preserve identity across serialization
         if cid is None or not isinstance(cid, str):
-            raise ValueError("Card.from_dict: card_id is required and must be a string")
+            raise DeserializationError("Card.from_dict: card_id is required and must be a string")
 
         card = Card(suit=suit, rank=rank, status=status, player=player)
         # restore original id (use name-mangled attribute)

@@ -1,5 +1,6 @@
 from card import Card, CardStatus
 from utils import str_list
+from errors.exceptions import DeserializationError
 
 class Player:
     def __init__(self, id):
@@ -90,17 +91,17 @@ class Player:
         This will create a new `Player` and populate its hand and played cards.
         """
         if not isinstance(d, dict):
-            raise ValueError("Player.from_dict expects a dict")
+            raise DeserializationError("Player.from_dict expects a dict")
 
         pid = d.get('player_id')
         if not isinstance(pid, int):
-            raise ValueError("Player.from_dict: player_id must be an int")
+            raise DeserializationError("Player.from_dict: player_id must be an int")
 
         p = Player(pid)
 
         hand_list = d.get('hand', [])
         if not isinstance(hand_list, list):
-            raise ValueError("Player.from_dict: 'hand' must be a list")
+            raise DeserializationError("Player.from_dict: 'hand' must be a list")
         for cd in hand_list:
             card = Card.from_dict(cd)
             # assign to player's hand (mutator enforces status/player and sorting)
@@ -108,7 +109,7 @@ class Player:
 
         played_list = d.get('played_cards', [])
         if not isinstance(played_list, list):
-            raise ValueError("Player.from_dict: 'played_cards' must be a list")
+            raise DeserializationError("Player.from_dict: 'played_cards' must be a list")
         for cd in played_list:
             card = Card.from_dict(cd)
             # normalize status/player to TABLE for played cards
