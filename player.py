@@ -27,9 +27,7 @@ class Player:
         elif next_status == CardStatus.PILE_DISCARD:
             next_pid = None
         else:
-            # todo: throw error
-            print("Error removing card from hand: card cannot change from a HAND to PILE_PICKUP or HAND status")
-            return           
+            raise ValueError("Error removing card from hand: card cannot change from a HAND to PILE_PICKUP or HAND status")
             
         card.update(next_status, next_pid)
         self.__hand.remove(card)  # idk if __eq__ needs to be overriden in Card

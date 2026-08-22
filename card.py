@@ -18,12 +18,10 @@ class Card:
         self.__player: int = player
 
         if player is None and (status == CardStatus.HAND or status == CardStatus.TABLE):
-            # todo: throw an error
-            print("player cannot be None when status is HAND or TABLE")
+            raise ValueError("player cannot be None when status is HAND or TABLE")
 
         if player is not None and (status == CardStatus.PILE_PICKUP or status == CardStatus.PILE_DISCARD):
-            # todo: throw an error
-            print("player must be None when status is PILE_PICKUP or PILE_DISCARD")
+            raise ValueError("player must be None when status is PILE_PICKUP or PILE_DISCARD")
 
     def change_status(self, new_status: 'CardStatus') -> None:
         """
@@ -31,10 +29,8 @@ class Card:
         """
         
         if not CardStatus.is_allowed_status_move(self.__status, new_status):
-            # todo: throw error
-            print(f"the new status ${new_status} is not an allowed change from current status ${self.__status}")
-        else:
-            self.__status = new_status
+            raise ValueError(f"the new status {new_status} is not an allowed change from current status {self.__status}")
+        self.__status = new_status
 
     def update(self, new_status: 'CardStatus', new_pid: int = None) -> None:
         """
@@ -45,11 +41,8 @@ class Card:
 
         if new_status == CardStatus.PILE_PICKUP or new_status == CardStatus.PILE_DISCARD:
             self.__player = None
-
-        elif new_pid == None:
-            # todo: throw error
-            print("player cannot be None when status is HAND or TABLE")
-    
+        elif new_pid is None:
+            raise ValueError("player cannot be None when status is HAND or TABLE")
         else:
             self.__player = new_pid
             # todo: check if player is valid
@@ -204,7 +197,7 @@ class Suit(Enum):
             case "H":
                 return Suit.HEARTS
             case _:
-                print("Given string is not a valid Suit.")
+                raise ValueError(f"Given string '{str}' is not a valid Suit")
 
 class Rank(Enum):
     ACE = 1
@@ -285,11 +278,11 @@ class CardStatus(Enum):
         todo: docstring
         """
         if stat_1 == CardStatus.PILE_PICKUP:
-            return stat_2 == (CardStatus.HAND or CardStatus.PILE_PICKUP)
+            return stat_2 in {CardStatus.HAND, CardStatus.PILE_PICKUP}
         elif stat_1 == CardStatus.PILE_DISCARD:
-            return stat_2 == (CardStatus.HAND or CardStatus.PILE_DISCARD)
+            return stat_2 in {CardStatus.HAND, CardStatus.PILE_DISCARD}
         elif stat_1 == CardStatus.HAND:
-            return stat_2 == (CardStatus.PILE_DISCARD or CardStatus.TABLE or CardStatus.HAND)
+            return stat_2 in {CardStatus.PILE_DISCARD, CardStatus.TABLE, CardStatus.HAND}
         else:
             return stat_2 == CardStatus.TABLE
 
