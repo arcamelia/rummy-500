@@ -81,38 +81,17 @@ class Game:
         Rotate players' turns until it's not possible to continue, then return the game's score.
         """
         
-        while True:
-            for p in self.players:
-                if len(self.pile_pickup) < 1:
-                    # only perform the more cpu intensive check if necessary
-                    if not self.can_play_from_discard(p.get_hand()):
-                        print("No more cards to pick up")
-                        return self.tally_scores()
-                    
-                self.run_turn_for_player(p)
-
-                if not p.get_hand():
-                    print(f"Player {p.get_id()} has gone out!")
-                    return self.tally_scores()
+        # Engine loop behavior should be implemented by the caller; this method
+        # historically performed console-driven rounds. For server or programmatic
+        # use, iterate players and call the action methods exposed on this class.
+        raise NotImplementedError("Game.run is UI-specific; use the engine action methods in a loop instead")
 
     def run_turn_for_player(self, player: Player) -> None:
         """
         Run a complete turn for given player. This consists of pickup, play (optional 
         unless pickup occurs from discard pile), and discard phases. 
         """
-        # console-based ui version
-        print(f"\n--- Player {player.get_id()}'s Turn ---")
-
-        # Show current hand and discard pile
-        hand = player.get_hand()
-        print("Your hand:", format_list_of_str(hand))
-        print("Discard pile:", format_list_of_str(self.pile_discard))
-
-        force_play_card = self.__run_pickup_phase(player)
-
-        self.__run_play_phase(player, force_play_card)
-
-        self.__run_discard_phase(player)
+        raise NotImplementedError("run_turn_for_player is UI-specific; use GameConsoleAdapter for interactive play")
 
     def __run_pickup_phase(self, player: Player) -> None | Card:
         """
@@ -128,38 +107,7 @@ class Game:
         up the JS, this method will return the JS, and add the 7C, 10C to the player's hand.
         (We return the JS because it has to be played straight away.)
         """
-        
-        add_to_hand: list[Card] = []
-
-        choice = input("Draw from (p)ickup or (d)iscard pile? [p/d] ").strip().lower()
-        if choice == "d":
-
-            choice = input("Choose card index to pick up from (0-indexed): ").strip().lower()
-            idx = int(choice)
-            add_to_hand = self.pile_discard[idx+1:]
-            chosen_card: Card = self.pile_discard[idx]
-
-            # check if chosen_card can be played right away
-            if not self.legal_play_possible_with(player.get_hand(), chosen_card):
-                print(f"You must be able to use {str(chosen_card)} immediately. Invalid choice.")
-                return self.__run_pickup_phase(player)
-
-            # card can be played, proceed with pick up
-            self.pile_discard = self.pile_discard[:idx]
-            
-        elif choice == "p":
-            chosen_card = None
-            add_to_hand.append(self.pile_pickup.pop())
-
-        else:
-            print("Invalid input.")
-            return self.__run_pickup_phase(player)
-
-        for c in add_to_hand:
-            player.add_to_hand(c)
-        print("Your hand after pickup:", format_list_of_str(player.get_hand()))
-
-        return chosen_card  # not None if taken from discard pile
+        raise NotImplementedError("__run_pickup_phase is UI-specific; use pickup_from_pickup or pickup_from_discard instead")
 
     def __run_play_phase(self, player: Player, reqd_card: Card = None) -> None:
         """
@@ -167,29 +115,66 @@ class Game:
         
         Validation is performed to ensure the chosen cards are legally playable.
         """
-        
-        if reqd_card is not None:
-            print(f"You now need to play the {reqd_card}, in addition to 0 or more other cards from your hand.")
-            self.__prompt_and_play(player, reqd_card, allow_skip=False)
-        
-        else: 
-            self.__prompt_and_play(player)
+        raise NotImplementedError("__run_play_phase is UI-specific; use play() engine method instead")
 
     def __run_discard_phase(self, player: Player) -> None:
         """
         Given player chooses a card from their hand and then discards it (i.e., the 
         chosen card gets placed at the end / the highest index of the discard pile).
         """
-        
-        print("Your hand:", format_list_of_str(player.get_hand()))
-        choice = input("Choose card index to discard (0-indexed): ")
-        idx = int(choice)
-        discard_card = player.get_hand()[idx]
+        raise NotImplementedError("__run_discard_phase is UI-specific; use discard() engine method instead")
 
-        player.rmv_from_hand(discard_card, CardStatus.PILE_DISCARD)
-        self.pile_discard.append(discard_card)
-        
-        print(f"You discarded {discard_card}.\n")
+    # ------------------ Engine action methods (UI-agnostic) ------------------
+    def pickup_from_pickup(self, player: Player) -> Card:
+        """Draw the top card from the pickup pile into the player's hand."""
+        if not self.pile_pickup:
+            raise IndexError("Pickup pile is empty")
+        card = self.pile_pickup.pop()
+        player.add_to_hand(card)
+        return card
+
+    def pickup_from_discard(self, player: Player, idx: int) -> Card:
+        """Pick up a card from the discard pile at `idx` and add subsequent cards to hand.
+
+        Returns the chosen card which must be used immediately by the caller (if game rules
+        require it). Raises `ValueError` if chosen card cannot be legally used immediately.
+        """
+        if idx < 0 or idx >= len(self.pile_discard):
+            raise IndexError("Discard index out of range")
+        chosen_card = self.pile_discard[idx]
+
+        if not self.legal_play_possible_with(player.get_hand(), chosen_card):
+            raise ValueError(f"Chosen card {chosen_card} cannot be used immediately")
+
+        # take the chosen card and all cards after it into the player's hand
+        add_to_hand = self.pile_discard[idx+1:]
+        self.pile_discard = self.pile_discard[:idx]
+        for c in add_to_hand:
+            player.add_to_hand(c)
+        return chosen_card
+
+    def play(self, player: Player, indices: list[int], type_of_play: str, reqd_card: Card | None = None) -> bool:
+        """Attempt to play selected indices from player's hand as `type_of_play` ('R' or 'W').
+
+        Returns True if play was successful, False otherwise.
+        """
+        if not indices:
+            chosen_cards = []
+        else:
+            chosen_cards = [player.get_hand()[i] for i in indices]
+        if reqd_card is not None:
+            chosen_cards.append(reqd_card)
+
+        return self.__try_play(player, chosen_cards, type_of_play)
+
+    def discard(self, player: Player, idx: int) -> Card:
+        """Discard the card at `idx` from player's hand onto the discard pile."""
+        if idx < 0 or idx >= len(player.get_hand()):
+            raise IndexError("Hand index out of range")
+        card = player.get_hand()[idx]
+        player.rmv_from_hand(card, CardStatus.PILE_DISCARD)
+        self.pile_discard.append(card)
+        return card
 
     def check_rummy(self, cards: list[Card]) -> bool:
         """
@@ -323,34 +308,7 @@ class Game:
 
         A normal phase of play is indicated by values of `reqd_card = None` and `allow_skip = True`.
         """
-        while True:
-            if allow_skip:
-                choice = input("Do you want to play any cards? [y/n] ").strip().lower()
-                if choice == "n":
-                    return
-                if choice != "y":
-                    print("Invalid input. Try again.")
-                    continue
-
-            print("Your hand:", format_list_of_str(player.get_hand()))
-            type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w] ").strip().upper()
-            if type_of_play != "R" and type_of_play != "W":
-                    print("Invalid input. Try again.")
-                    continue
-            indices_i = input("Choose card indices (0-indexed) from your hand to play (comma-separated): ").strip()
-            indices = self.__parse_input_to_list_of_indices(indices_i, len(player.get_hand()))
-            if indices is None:
-                print("Invalid input. Try again.")
-                continue
-
-            chosen_cards = [player.get_hand()[i] for i in indices] + ([] if reqd_card is None else [reqd_card])
-            print(f"Chosen cards: {format_list_of_str(chosen_cards)}")
-
-            if self.__try_play(player, chosen_cards, type_of_play):
-                reqd_card = None
-                allow_skip = True
-            else:
-                print("Cards were not played successfully. Try again.")
+        raise NotImplementedError("__prompt_and_play is UI-specific; use play() engine method instead")
 
     def __try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
         """
@@ -358,13 +316,9 @@ class Game:
         & removed from given player's hand.
         """
         if not self.legal_play_spec(cards, type_of_play):
-            print("Invalid play. Try again.")
             return False
-        
-        print("Valid play.")
-        self.__play_cards(player, cards, type_of_play)
 
-        print(f"Updated table: \n{self.stringify_table()}")
+        self.__play_cards(player, cards, type_of_play)
         return True
 
     def __play_cards(self, player: Player, cards: list[Card], type_of_play: str) -> None:
@@ -610,114 +564,168 @@ class Game:
             s += "\n"
         s += "}"
         return s
+
+
+class GameConsoleAdapter:
+    """Thin console adapter that uses `Game` engine methods for interactive play.
+
+    This adapter keeps all `input()` / `print()` calls out of the engine itself so the
+    engine can be used in servers, tests, or other adapters (web UI). Use this class
+    only for local interactive sessions.
+    """
+    def __init__(self, game: Game):
+        self.game = game
+
+    def run_turn_for_player(self, player: Player) -> None:
+        print(f"\n--- Player {player.get_id()}'s Turn ---")
+        print("Your hand:", format_list_of_str(player.get_hand()))
+        print("Discard pile:", format_list_of_str(self.game.pile_discard))
+
+        # Pickup phase
+        while True:
+            choice = input("Draw from (p)ickup or (d)iscard pile? [p/d] ").strip().lower()
+            if choice == 'd':
+                try:
+                    idx = int(input("Choose card index to pick up from (0-indexed): ").strip())
+                    reqd_card = self.game.pickup_from_discard(player, idx)
+                    break
+                except Exception as e:
+                    print("Invalid pickup from discard:", e)
+                    continue
+            elif choice == 'p':
+                try:
+                    reqd_card = None
+                    self.game.pickup_from_pickup(player)
+                    break
+                except Exception as e:
+                    print("Invalid pickup from pickup pile:", e)
+                    continue
+            else:
+                print("Invalid input.")
+
+        # Play phase
+        while True:
+            if reqd_card is None:
+                choice = input("Do you want to play any cards? [y/n] ").strip().lower()
+                if choice == 'n':
+                    break
+                if choice != 'y':
+                    print("Invalid input. Try again.")
+                    continue
+
+            print("Your hand:", format_list_of_str(player.get_hand()))
+            type_of_play = input("Do you want to play a (r)un or a (w)reck? [r/w] ").strip().upper()
+            if type_of_play not in ('R', 'W'):
+                print("Invalid input. Try again.")
+                continue
+
+            indices_i = input("Choose card indices (0-indexed) from your hand to play (comma-separated): ").strip()
+            indices = self.game._Game__parse_input_to_list_of_indices(indices_i, len(player.get_hand()))
+            if indices is None:
+                print("Invalid input. Try again.")
+                continue
+
+            success = self.game.play(player, indices, type_of_play, reqd_card)
+            if success:
+                reqd_card = None
+                print("Play successful.")
+                print("Updated table:\n", self.game.stringify_table())
+            else:
+                print("Invalid play. Try again.")
+                continue
+
+            # allow multiple plays per turn
+            more = input("Play more? [y/n] ").strip().lower()
+            if more != 'y':
+                break
+
+        # Discard phase
+        while True:
+            try:
+                print("Your hand:", format_list_of_str(player.get_hand()))
+                idx = int(input("Choose card index to discard (0-indexed): ").strip())
+                card = self.game.discard(player, idx)
+                print(f"You discarded {card}.\n")
+                break
+            except Exception as e:
+                print("Invalid discard:", e)
+                continue
     
 
 ######################## TESTING ########################
 
-game = Game(2)
+if __name__ == '__main__':
+    game = Game(2)
 
-# all cards in the deck, for convenience
-_ac = Card(Suit.CLUBS, Rank.ACE, None)
-_2c = Card(Suit.CLUBS, Rank.TWO, None)
-_3c = Card(Suit.CLUBS, Rank.THREE, None)
-_4c = Card(Suit.CLUBS, Rank.FOUR, None)
-_5c = Card(Suit.CLUBS, Rank.FIVE, None)
-_6c = Card(Suit.CLUBS, Rank.SIX, None)
-_7c = Card(Suit.CLUBS, Rank.SEVEN, None)
-_8c = Card(Suit.CLUBS, Rank.EIGHT, 0)
-_9c = Card(Suit.CLUBS, Rank.NINE, None)
-_10c = Card(Suit.CLUBS, Rank.TEN, None)
-_jc = Card(Suit.CLUBS, Rank.JACK, None)
-_qc = Card(Suit.CLUBS, Rank.QUEEN, None)
-_kc = Card(Suit.CLUBS, Rank.KING, None)
+    # all cards in the deck, for convenience
+    _ac = Card(Suit.CLUBS, Rank.ACE, None)
+    _2c = Card(Suit.CLUBS, Rank.TWO, None)
+    _3c = Card(Suit.CLUBS, Rank.THREE, None)
+    _4c = Card(Suit.CLUBS, Rank.FOUR, None)
+    _5c = Card(Suit.CLUBS, Rank.FIVE, None)
+    _6c = Card(Suit.CLUBS, Rank.SIX, None)
+    _7c = Card(Suit.CLUBS, Rank.SEVEN, None)
+    _8c = Card(Suit.CLUBS, Rank.EIGHT, 0)
+    _9c = Card(Suit.CLUBS, Rank.NINE, None)
+    _10c = Card(Suit.CLUBS, Rank.TEN, None)
+    _jc = Card(Suit.CLUBS, Rank.JACK, None)
+    _qc = Card(Suit.CLUBS, Rank.QUEEN, None)
+    _kc = Card(Suit.CLUBS, Rank.KING, None)
 
-_ad = Card(Suit.DIAMONDS, Rank.ACE, None)
-_2d = Card(Suit.DIAMONDS, Rank.TWO, None)
-_3d = Card(Suit.DIAMONDS, Rank.THREE, None)
-_4d = Card(Suit.DIAMONDS, Rank.FOUR, None)
-_5d = Card(Suit.DIAMONDS, Rank.FIVE, None)
-_6d = Card(Suit.DIAMONDS, Rank.SIX, None)
-_7d = Card(Suit.DIAMONDS, Rank.SEVEN, None)
-_8d = Card(Suit.DIAMONDS, Rank.EIGHT, None)
-_9d = Card(Suit.DIAMONDS, Rank.NINE, None)
-_10d = Card(Suit.DIAMONDS, Rank.TEN, None)
-_jd = Card(Suit.DIAMONDS, Rank.JACK, None)
-_qd = Card(Suit.DIAMONDS, Rank.QUEEN, None)
-_kd = Card(Suit.DIAMONDS, Rank.KING, None)
+    _ad = Card(Suit.DIAMONDS, Rank.ACE, None)
+    _2d = Card(Suit.DIAMONDS, Rank.TWO, None)
+    _3d = Card(Suit.DIAMONDS, Rank.THREE, None)
+    _4d = Card(Suit.DIAMONDS, Rank.FOUR, None)
+    _5d = Card(Suit.DIAMONDS, Rank.FIVE, None)
+    _6d = Card(Suit.DIAMONDS, Rank.SIX, None)
+    _7d = Card(Suit.DIAMONDS, Rank.SEVEN, None)
+    _8d = Card(Suit.DIAMONDS, Rank.EIGHT, None)
+    _9d = Card(Suit.DIAMONDS, Rank.NINE, None)
+    _10d = Card(Suit.DIAMONDS, Rank.TEN, None)
+    _jd = Card(Suit.DIAMONDS, Rank.JACK, None)
+    _qd = Card(Suit.DIAMONDS, Rank.QUEEN, None)
+    _kd = Card(Suit.DIAMONDS, Rank.KING, None)
 
-_as = Card(Suit.SPADES, Rank.ACE, None)
-_2s = Card(Suit.SPADES, Rank.TWO, None)
-_3s = Card(Suit.SPADES, Rank.THREE, None)
-_4s = Card(Suit.SPADES, Rank.FOUR, None)
-_5s = Card(Suit.SPADES, Rank.FIVE, None)
-_6s = Card(Suit.SPADES, Rank.SIX, None)
-_7s = Card(Suit.SPADES, Rank.SEVEN, None)
-_8s = Card(Suit.SPADES, Rank.EIGHT, None)
-_9s = Card(Suit.SPADES, Rank.NINE, None)
-_10s = Card(Suit.SPADES, Rank.TEN, None)
-_js = Card(Suit.SPADES, Rank.JACK, None)
-_qs = Card(Suit.SPADES, Rank.QUEEN, None)
-_ks = Card(Suit.SPADES, Rank.KING, None)
+    _as = Card(Suit.SPADES, Rank.ACE, None)
+    _2s = Card(Suit.SPADES, Rank.TWO, None)
+    _3s = Card(Suit.SPADES, Rank.THREE, None)
+    _4s = Card(Suit.SPADES, Rank.FOUR, None)
+    _5s = Card(Suit.SPADES, Rank.FIVE, None)
+    _6s = Card(Suit.SPADES, Rank.SIX, None)
+    _7s = Card(Suit.SPADES, Rank.SEVEN, None)
+    _8s = Card(Suit.SPADES, Rank.EIGHT, None)
+    _9s = Card(Suit.SPADES, Rank.NINE, None)
+    _10s = Card(Suit.SPADES, Rank.TEN, None)
+    _js = Card(Suit.SPADES, Rank.JACK, None)
+    _qs = Card(Suit.SPADES, Rank.QUEEN, None)
+    _ks = Card(Suit.SPADES, Rank.KING, None)
 
-_ah = Card(Suit.HEARTS, Rank.ACE, None)
-_2h = Card(Suit.HEARTS, Rank.TWO, None)
-_3h = Card(Suit.HEARTS, Rank.THREE, None)
-_4h = Card(Suit.HEARTS, Rank.FOUR, None)
-_5h = Card(Suit.HEARTS, Rank.FIVE, None)
-_6h = Card(Suit.HEARTS, Rank.SIX, None)
-_7h = Card(Suit.HEARTS, Rank.SEVEN, None)
-_8h = Card(Suit.HEARTS, Rank.EIGHT, None)
-_9h = Card(Suit.HEARTS, Rank.NINE, None)
-_10h = Card(Suit.HEARTS, Rank.TEN, None)
-_jh = Card(Suit.HEARTS, Rank.JACK, None)
-_qh = Card(Suit.HEARTS, Rank.QUEEN, None)
-_kh = Card(Suit.HEARTS, Rank.KING, None)
+    _ah = Card(Suit.HEARTS, Rank.ACE, None)
+    _2h = Card(Suit.HEARTS, Rank.TWO, None)
+    _3h = Card(Suit.HEARTS, Rank.THREE, None)
+    _4h = Card(Suit.HEARTS, Rank.FOUR, None)
+    _5h = Card(Suit.HEARTS, Rank.FIVE, None)
+    _6h = Card(Suit.HEARTS, Rank.SIX, None)
+    _7h = Card(Suit.HEARTS, Rank.SEVEN, None)
+    _8h = Card(Suit.HEARTS, Rank.EIGHT, None)
+    _9h = Card(Suit.HEARTS, Rank.NINE, None)
+    _10h = Card(Suit.HEARTS, Rank.TEN, None)
+    _jh = Card(Suit.HEARTS, Rank.JACK, None)
+    _qh = Card(Suit.HEARTS, Rank.QUEEN, None)
+    _kh = Card(Suit.HEARTS, Rank.KING, None)
 
-############### initialize a table midgame ###############
+    ############### initialize a table midgame ###############
 
-rc1 = [ _5c, _6c, _7c ]
-wa2 = [ _ac, _ad, _as ]
-rh3 = [ _10h, _jh, _qh, _kh ]
-rs4 = [ _8s, _9s, _10s ]
-rh5 = [ _6h, _7h, _8h ]
-w36 = [ _3d, _3s, _3h ]
+    rc1 = [ _5c, _6c, _7c ]
+    wa2 = [ _ac, _ad, _as ]
+    rh3 = [ _10h, _jh, _qh, _kh ]
+    rs4 = [ _8s, _9s, _10s ]
+    rh5 = [ _6h, _7h, _8h ]
+    w36 = [ _3d, _3s, _3h ]
 
-game.table = { "RC1": rc1, "WA2": wa2, "RH3": rh3, "RS4": rs4, "RH5": rh5, "W36": w36 }
-print("table = " + game.stringify_table())
-"""
-table = {
-    RC1: [5C, 6C, 7C],
-    WA2: [AC, AD, AS],
-    RH3: [10H, JH, QH, KH],
-    RS4: [8S, 9S, 10S],
-    RH5: [6H, 7H, 8H],
-    W36: [3D, 3S, 3H]
-}
-"""
-# eight_nine_clubs = [ _8c, _9c ]
-# jack_to_king_spades = [ _js, _qs, _ks ]
-# nine_hearts = [ _9h ]
-# three_clubs = [ _3c ]
-# king_clubs = [ _kc ]
+    game.table = { "RC1": rc1, "WA2": wa2, "RH3": rh3, "RS4": rs4, "RH5": rh5, "W36": w36 }
+    print("table = " + game.stringify_table())
 
-# TEST legal_play_possible_with
-# discard_pile = [ _8c, _4h, _6d, _js, _jh, _kh]
-# print(f"0 case should be true: {game.legal_play_possible_with(discard_pile, _4c)}")
-# print(f"1 case should be true: {game.legal_play_possible_with(discard_pile, _9c)}")
-# print(f"1 case should be true: {game.legal_play_possible_with(discard_pile, _qs)}")
-# print(f"2 case should be true: {game.legal_play_possible_with(discard_pile, _qh)}")
-# print(f"None case should be false: {game.legal_play_possible_with(discard_pile, _10c)}")
-
-#########################################################
-
-# 2. TEST __prompt_and_play
-# 3. TEST run_turn_for_player
-
-
-# test_cards = [ Card(Suit.HEARTS, Rank.FIVE, None), Card(Suit.HEARTS, Rank.FOUR, None) ]
-# print( f"{format_list_of_str(str_list(test_cards))} can be played: {game.legal_play(test_cards)}" )
-
-#########################################################
-
-game.get_players()[0].add_to_hand(_8c)
-game.run_turn_for_player(game.get_players()[0])
+    game.get_players()[0].add_to_hand(_8c)
+    adapter = GameConsoleAdapter(game)
+    adapter.run_turn_for_player(game.get_players()[0])
