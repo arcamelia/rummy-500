@@ -68,12 +68,12 @@ class Game:
 
     def __init__(self, num_players):
         self.players = []
-        self.__add_players(num_players)
-        deck: list[Card] = self.__initialize_deck()
-        self.__deal_cards(deck, self.players)
+        self._add_players(num_players)
+        deck: list[Card] = self._initialize_deck()
+        self._deal_cards(deck, self.players)
 
-        self.pile_discard = self.__initialize_pile_discard(deck)
-        self.pile_pickup = self.__initialize_pile_pickup(deck)
+        self.pile_discard = self._initialize_pile_discard(deck)
+        self.pile_pickup = self._initialize_pile_pickup(deck)
         
         self.table: dict[str,list[Card]] = {}
         self.id_counter = 0
@@ -126,7 +126,7 @@ class Game:
         if reqd_card is not None:
             chosen_cards.append(reqd_card)
 
-        return self.__try_play(player, chosen_cards, type_of_play)
+        return self._try_play(player, chosen_cards, type_of_play)
 
     def discard(self, player: Player, idx: int) -> Card:
         """
@@ -161,7 +161,7 @@ class Game:
         will return `False`, as these two plays should be made separately (even though the two
         plays are legal on their own).
         """
-        if len(cards) < 3: return self.__legal_play_addon(cards, type_of_play)
+        if len(cards) < 3: return self._legal_play_addon(cards, type_of_play)
 
         ranks = Card.map_to_rank(cards)
         if all(x == ranks[0] for x in ranks) and type_of_play == "W": return True
@@ -198,7 +198,7 @@ class Game:
                     return True
         return False
 
-    def __legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
+    def _legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
         """
         Return true iff all cards in given list can be added on to existing plays on the table AND 
         is classified under the correct type of play (`"R"` or `"W"`).
@@ -208,20 +208,20 @@ class Game:
         match len(cards):
             case 1:
                 return (
-                    self.__legal_one_card_play_r(cards[0]) and type_of_play == "R"
+                    self._legal_one_card_play_r(cards[0]) and type_of_play == "R"
                 ) or (
-                    self.__legal_one_card_play_w(cards[0]) and type_of_play == "W"
+                    self._legal_one_card_play_w(cards[0]) and type_of_play == "W"
                 )
             case 2:
                 if type_of_play != "R": return False
                 c1: Card = cards[0]
                 c2: Card = cards[1]
-                one_card_legal = self.__legal_one_card_play_r(c1) or self.__legal_one_card_play_r(c2)
+                one_card_legal = self._legal_one_card_play_r(c1) or self._legal_one_card_play_r(c2)
                 return one_card_legal and Card.same_suit(c1, c2) and Card.consecutive_rank(c1, c2)
             case _:
                 return False
 
-    def __legal_one_card_play_r(self, card: Card) -> bool:
+    def _legal_one_card_play_r(self, card: Card) -> bool:
         """
         Return true if given card can be played on an existing *R*.
         """
@@ -235,7 +235,7 @@ class Game:
             if consecutive_low_no_ace or consecutive_high_no_ace: return True
         return False
 
-    def __legal_one_card_play_w(self, card: Card) -> bool:
+    def _legal_one_card_play_w(self, card: Card) -> bool:
         """
         Return true if given card can be played on an existing *W*.
         """
@@ -244,17 +244,17 @@ class Game:
             if k.startswith(key_to_find): return True
         return False
 
-    def __try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
+    def _try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
         """
         Return `True` if given cards form a legal play, and are properly added to the table 
         & removed from given player's hand.
         """
         if not self.legal_play_spec(cards, type_of_play):
             return False
-        self.__play_cards(player, cards, type_of_play)
+        self._play_cards(player, cards, type_of_play)
         return True
 
-    def __play_cards(self, player: Player, cards: list[Card], type_of_play: str) -> None:
+    def _play_cards(self, player: Player, cards: list[Card], type_of_play: str) -> None:
         """
         Encompasses all behaviour that occurs when a player moves 1 or more cards 
         from their hand onto the table as points.
@@ -264,16 +264,16 @@ class Game:
         **CONSTRAINT**: `type_of_play = "R" | "W"`, cards have already been tested for validity
         """
         player.move_cards_to_played(cards)
-        play_key = self.__find_play_match(cards, type_of_play)
+        play_key = self._find_play_match(cards, type_of_play)
         if play_key == None:
-            new_key = self.__create_key(cards, type_of_play)
+            new_key = self._create_key(cards, type_of_play)
             self.table[new_key] = cards
         else:
             old_play_list = self.table[play_key]
             self.table[play_key] = Card.sort_by_suit_and_rank(old_play_list + cards)
-        self.__clean_up_table()
+        self._clean_up_table()
 
-    def __find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
+    def _find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
         """
         Find a list of cards on the table, if one exists, that param cards can be added to. 
         Return the key of matching list if successful, otherwise return `None`.
@@ -282,11 +282,11 @@ class Game:
         """
         filtered_table = { k: v for k, v in self.table.items() if k.startswith(type_of_play) }
         for k, v in filtered_table.items():
-            if self.__cards_can_be_joined(v, cards, type_of_play):
+            if self._cards_can_be_joined(v, cards, type_of_play):
                 return k
         return None
 
-    def __cards_can_be_joined(self, cards_1: list[Card], cards_2: list[Card], type_of_play: str) -> bool:
+    def _cards_can_be_joined(self, cards_1: list[Card], cards_2: list[Card], type_of_play: str) -> bool:
         """
         Return `True` if two lists of cards can be joined, based on the `type_of_play`.
 
@@ -296,7 +296,7 @@ class Game:
             return cards_1[0].rank == cards_2[0].rank
         if cards_1[0].suit != cards_2[0].suit:
             return False
-        high_ace = self.__high_ace(cards_1) or self.__high_ace(cards_2) or self.__high_ace(cards_1 + cards_2)
+        high_ace = self._high_ace(cards_1) or self._high_ace(cards_2) or self._high_ace(cards_1 + cards_2)
         amalgamated_cards = Card.sort_by_suit_and_rank(cards_1 + cards_2, high_ace)
         counter = amalgamated_cards[0].rank_value
         for c in amalgamated_cards:
@@ -308,7 +308,7 @@ class Game:
             counter += 1
         return True
 
-    def __clean_up_table(self):
+    def _clean_up_table(self):
         """
         Join any runs together in `self.table` that are connected.
         """
@@ -316,13 +316,13 @@ class Game:
         for k1, v1 in self.table.items():
             for k2, v2 in self.table.items():
                 if k1.startswith("R") and k2.startswith("R") and k1 != k2:
-                    if self.__cards_can_be_joined(v1, v2, "R"):
+                    if self._cards_can_be_joined(v1, v2, "R"):
                         self.table[k1] = Card.sort_by_suit_and_rank(v1 + v2)
                         to_rmv.append(k2)
         for k in to_rmv:
             self.table.pop(k)
     
-    def __high_ace(self, cards: list[Card]):
+    def _high_ace(self, cards: list[Card]):
         """
         Return `True` if there is an ace in the list of cards that should be represented 
         as a high card (a rank value of 14 instead of the default 1).
@@ -338,7 +338,7 @@ class Game:
         ranks = { c.rank for c in cards }
         return Rank.ACE in ranks and Rank.KING in ranks
 
-    def __create_key(self, cards: list[Card], type_of_play: str) -> str:
+    def _create_key(self, cards: list[Card], type_of_play: str) -> str:
         """
         Return a new, unique key for given list of cards to be played on the table.
 
@@ -365,11 +365,11 @@ class Game:
         scores = {}
         for p in self.players:
             cards_played = p.played_cards
-            score = self.__sum_points(list(cards_played))
+            score = self._sum_points(list(cards_played))
             scores[p.id] = score
         return scores
 
-    def __sum_points(self, cards: list[Card]) -> int:
+    def _sum_points(self, cards: list[Card]) -> int:
         """
         Return the total point value of all the cards in given list.
         """
@@ -378,7 +378,7 @@ class Game:
             score += CARD_POINT_VALUES[c.rank]
         return score
 
-    def __initialize_deck(self) -> list[Card]:
+    def _initialize_deck(self) -> list[Card]:
         """
         Initialize and return a new deck of shuffled cards.
         """
@@ -390,7 +390,7 @@ class Game:
         random.shuffle(deck)
         return deck
 
-    def __deal_cards(self, deck: list[Card], players: list[Player]) -> None:
+    def _deal_cards(self, deck: list[Card], players: list[Player]) -> None:
         """
         Deal out `NUM_CARDS_PER_PLAYER` to the given players.
         """
@@ -400,7 +400,7 @@ class Game:
                 card.update(CardStatus.HAND, p.id)
                 p.add_to_hand(card)
 
-    def __initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
+    def _initialize_pile_discard(self, deck: list[Card]) -> list[Card]:
         """
         Return a list of cards representing the discard pile.
         """
@@ -408,7 +408,7 @@ class Game:
         c.update(CardStatus.PILE_DISCARD)
         return [ c, deck.pop(), deck.pop() ]
 
-    def __initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
+    def _initialize_pile_pickup(self, deck: list[Card]) -> list[Card]:
         """
         Return a list of cards representing the pickup pile.
         """
@@ -416,7 +416,7 @@ class Game:
             card.update(CardStatus.PILE_PICKUP)
         return deck
 
-    def __add_players(self, num_players: int) -> None:
+    def _add_players(self, num_players: int) -> None:
         """
         Create and add the given number of players to the game (all with unique id).
         """
@@ -424,10 +424,6 @@ class Game:
             raise ValueError(f"Maximum number of players is {MAX_PLAYERS}")
         for p in range(num_players):
             self.players.append(Player(p+1))
-
-    @property
-    def players(self) -> list[Player]:
-        return list(self.players)
 
     def __str__(self) -> str:
         players = "\n\t".join(str_list(self.players))

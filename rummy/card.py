@@ -43,7 +43,7 @@ class Card:
             self._player = new_pid
 
     @staticmethod
-    def __sort_key(card: 'Card', ace_high: bool) -> tuple[int,int]:
+    def _sort_key(card: 'Card', ace_high: bool) -> tuple[int,int]:
         """
         Key function for sorting cards by suit and then by rank
         """
@@ -60,7 +60,7 @@ class Card:
         \nOrder of suits: C, D, S, H
         \nOrder of ranks: A, 2, 3, ..., J, Q, K (or A high if specified)
         """
-        return sorted(cards, key=lambda card: Card.__sort_key(card, ace_high))
+        return sorted(cards, key=lambda card: Card._sort_key(card, ace_high))
 
     @staticmethod
     def map_to_rank(cards: list['Card']) -> list[int]:
