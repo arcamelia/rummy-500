@@ -63,14 +63,14 @@ class Card:
         return sorted(cards, key=lambda card: Card._sort_key(card, ace_high))
 
     @staticmethod
-    def map_to_rank(cards: list['Card']) -> list[int]:
+    def map_to_ranks(cards: list['Card']) -> list[int]:
         """
         Convert a list of cards into a list of those cards' ranks.
         """
         return list(map(Card.get_rank_value, cards))
 
     @staticmethod
-    def map_to_suit(cards: list['Card']) -> list[int]:
+    def map_to_suits(cards: list['Card']) -> list[int]:
         """
         Convert a list of cards into a list of those cards' suits.
         """
@@ -81,7 +81,7 @@ class Card:
         """
         Return true if given list of cards contains an ace.
         """
-        ranks = Card.map_to_rank(cards)
+        ranks = Card.map_to_ranks(cards)
         return Rank.ACE.value in ranks
 
     @staticmethod
