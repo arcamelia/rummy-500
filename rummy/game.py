@@ -33,22 +33,23 @@ class Game:
     players: list[Player]
     pile_pickup: list[Card]
     pile_discard: list[Card]
-    play_id_counter: int
+
+    play_id_counter: int # used for play.key generation
+    # plays: key = <play.id>, value = <play>
+    plays: dict[int, Play]
+    # card_loc_dict: key = <card.id>, value = (<play.id>, <index in play.cards>)
+    card_loc_dict: dict[str, tuple[int,int]]
 
     def __init__(self, num_players):
         self.players = []
         self.players = self._initialize_players(num_players)
         deck: list[Card] = self._initialize_deck()
         self._deal_cards(deck, self.players)
-
         self.pile_discard = self._initialize_pile_discard(deck)
         self.pile_pickup = self._initialize_pile_pickup(deck)
-        self.play_id_counter = 0 # used for play.key generation
-        
-        # plays: key = <play.id>, value = <play>
-        self.plays: dict[int, Play] = {}
-        # card_loc_dict: key = <card.id>, value = (<play.id>, <index in play.cards>)
-        self.card_loc_dict: dict[str, tuple[int,int]] = {}
+        self.play_id_counter = 0
+        self.plays = {}
+        self.card_loc_dict = {}
 
 #################### turn phases ####################
 
