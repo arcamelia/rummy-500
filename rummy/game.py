@@ -81,7 +81,7 @@ class Game:
             player.add_to_hand(c)
         return chosen_card
 
-    def play(self, player: Player, indices: list[int], type_of_play: str, reqd_card: Card | None = None) -> bool:
+    def play(self, player: Player, indices: list[int], type_of_play: PlayType, reqd_card: Card | None = None) -> bool:
         """
         Phase **play** of a player's turn
         """
@@ -113,13 +113,12 @@ class Game:
         """
         return {c in self.pile_discard for c in cards} and self.legal_play(cards)
 
-    def legal_play(self, cards: list[Card], type_of_play: str = None) -> bool:
+    def legal_play(self, cards: list[Card], type_of_play: PlayType = None) -> bool:
         """
-        Return `True` if given list of cards can form a legal play based on the specified type (could be a 
-        *R* [`type_of_play="R"`] or a *W* [`type_of_play="W"`]).
+        Return `True` if given list of cards can form a legal play based on the specified type.
 
-        If the value of `type_of_play` does not match the type of play that can be legally formed, 
-        the method will return `False` (i.e., responsibility is on the caller to ensure the type of play 
+        If `type_of_play` does not match the type of play that can be legally formed, the method 
+        will return `False` (i.e., responsibility is on the caller to ensure the type of play 
         is classified correctly).
         
         **CONSTRAINT:** Method will only return `True` if all cards in given list encompass a 
@@ -130,14 +129,18 @@ class Game:
         plays are legal on their own).
         """
         # if no type_of_play is specified, check if it's legal as either a run or a wreck
-        if not type_of_play: return self.legal_play(cards, "R") or self.legal_play(cards, "W")
+        if not type_of_play: return self.legal_play(cards, PlayType.RUN) or self.legal_play(cards, PlayType.WRECK)
 
         # type_of_play is specified, proceed as usual
         if len(cards) < 3: return self._legal_play_addon(cards, type_of_play)
 
-        ranks = Card.map_to_rank(cards)
-        if all(x == ranks[0] for x in ranks) and type_of_play == "W": return True
-        suits = Card.map_to_suit(cards)
+        # check WRECK
+        ranks = Card.map_to_ranks(cards)
+        if all(x == ranks[0] for x in ranks) and type_of_play == PlayType.WRECK: return True
+
+        # check RUN
+        if type_of_play != PlayType.RUN: return False
+        suits = Card.map_to_suits(cards)
         same_suit = all(x == suits[0] for x in suits)
         consecutive_rank = sorted(ranks) == list(range(min(ranks), max(ranks)+1))
 
@@ -145,10 +148,11 @@ class Game:
             for i in range(len(ranks)):
                 if ranks[i] == 1:
                     ranks[i] = 14
+            # check both ace-low and ace-high scenarios
+            consecutive_rank_high_ace = sorted(ranks) == list(range(min(ranks), max(ranks)+1))
+            consecutive_rank = consecutive_rank or consecutive_rank_high_ace
 
-            consecutive_rank = consecutive_rank or sorted(ranks) == list(range(min(ranks), max(ranks)+1))
-
-        return same_suit and consecutive_rank and type_of_play == "R"
+        return same_suit and consecutive_rank
 
     def legal_play_with(self, aux: list[Card], required_card: Card) -> bool:
         """
@@ -157,29 +161,30 @@ class Game:
         """
         if self.legal_play([required_card]):
             return True
-        for num_extra_cards in range(4):
+        for num_extra_cards in range(3):
+            # TODO: test this
             for subset in itertools.combinations(aux, num_extra_cards):
                 candidate_play = [required_card] + list(subset)
                 if self.legal_play(candidate_play):
                     return True
         return False
 
-    def _legal_play_addon(self, cards: list[Card], type_of_play: str) -> bool:
+    def _legal_play_addon(self, cards: list[Card], type_of_play: PlayType) -> bool:
         """
-        Return true iff all cards in given list can be added on to existing plays on the table AND 
-        is classified under the correct type of play (`"R"` or `"W"`).
+        Return true iff all cards in given list can be added on to a singular existing play 
+        _and_ is classified under the correct `type_of_play`.
         
         This method should only be called on lists with `len < 3`.
         """
         match len(cards):
             case 1:
                 return (
-                    self._legal_play_one_card_r(cards[0]) and type_of_play == "R"
+                    self._legal_play_one_card_r(cards[0]) and type_of_play == PlayType.RUN
                 ) or (
-                    self._legal_play_one_card_w(cards[0]) and type_of_play == "W"
+                    self._legal_play_one_card_w(cards[0]) and type_of_play == PlayType.WRECK
                 )
             case 2:
-                if type_of_play != "R": return False
+                if type_of_play == PlayType.WRECK: return False
                 c1: Card = cards[0]
                 c2: Card = cards[1]
                 one_card_legal = self._legal_play_one_card_r(c1) or self._legal_play_one_card_r(c2)
@@ -189,26 +194,27 @@ class Game:
 
     def _legal_play_one_card_r(self, c: Card) -> bool:
         """
-        Return true if given card can be played on an existing *R*.
+        Return true if given card can be played on an existing RUN play.
         """
-        # Look through plays of type 'R' with matching suit
         for play in self.plays.values():
-            if play.type != 'R': continue
-            if str(c.suit) != play.key: continue # TODO: key isn't just suit??
+            if play.type != PlayType.RUN: continue
+            if str(c.suit) != play.key: continue
+
+            # found a play of same suit, check if card matches either end of the run
             cards = play.cards
             if not cards: continue
             consecutive_low_no_ace = Card.consecutive_rank(c, cards[0]) and cards[0].rank != Rank.ACE
             consecutive_high_no_ace = Card.consecutive_rank(c, cards[-1]) and cards[-1].rank != Rank.ACE
             if consecutive_low_no_ace or consecutive_high_no_ace: return True
+
         return False
 
     def _legal_play_one_card_w(self, card: Card) -> bool:
         """
-        Return true if given card can be played on an existing *W*.
+        Return true if given card can be played on an existing WRECK play.
         """
-        # Look for plays of type 'W' matching the rank
         for play in self.plays.values():
-            if play.type == 'W' and play.key == str(card.rank): # TODO: what is key???
+            if play.type == PlayType.WRECK and play.key == str(card.rank):
                 return True
         return False
 
@@ -252,7 +258,7 @@ class Game:
         self._clean_up_table()
         player.move_cards_to_played(cards)
 
-    def _find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
+    def _find_play_match(self, cards: list[Card], type_of_play: PlayType) -> str | None:
         """
         Find a Play in the Game, if one exists, that param cards can be added to. 
         Return the key of matching play if successful, otherwise return `None`.
