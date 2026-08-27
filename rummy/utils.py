@@ -4,10 +4,13 @@ def str_list(lst):
     """
     return list(map(str, lst))
 
+
 def format_list_of_str(lst):
     """
     Return a nicely formatted string representation of the given list of objects.
     """
+    if not lst:
+        return ""
     if not isinstance(lst[0], str):
         lst = str_list(lst)
     return ", ".join(lst)
