@@ -6,6 +6,7 @@ from .errors.exceptions import DuplicateIDError, GameStateError
 
 
 def _check_card_dict(cd: dict, location: str, seen: set):
+    # Validate a card dict and ensure its card_id is unique using card_loc mapping.
     if not isinstance(cd, dict):
         raise GameStateError("card entry must be a dict")
     cid = cd.get('card_id')
@@ -13,7 +14,7 @@ def _check_card_dict(cd: dict, location: str, seen: set):
         raise GameStateError("card_id missing or invalid in snapshot")
     if cid in seen:
         raise DuplicateIDError(f"Duplicate card_id in snapshot: {cid}")
-    seen.add(cid)
+    seen[cid] = location
 
     st = cd.get('status')
     if st is not None:
@@ -50,7 +51,8 @@ def validate_snapshot(obj: Union[dict, str, Path]) -> None:
     if not isinstance(d, dict):
         raise GameStateError("snapshot root must be a dict")
 
-    seen = set()
+    # Use a mapping card_id -> location to detect duplicates and provide fast lookups
+    card_loc = {}
 
     players_list = d.get('players', [])
     if not isinstance(players_list, list):
@@ -62,30 +64,35 @@ def validate_snapshot(obj: Union[dict, str, Path]) -> None:
         if not isinstance(hand, list):
             raise GameStateError("'hand' must be a list in player snapshot")
         for cd in hand:
-            _check_card_dict(cd, 'hand', seen)
+            _check_card_dict(cd, 'hand', card_loc)
         played = pd.get('played_cards', [])
         if not isinstance(played, list):
             raise GameStateError("'played_cards' must be a list in player snapshot")
         for cd in played:
-            _check_card_dict(cd, 'played', seen)
+            _check_card_dict(cd, 'played', card_loc)
 
     pile_pickup_list = d.get('pile_pickup', [])
     if not isinstance(pile_pickup_list, list):
         raise GameStateError("'pile_pickup' must be a list in snapshot")
     for cd in pile_pickup_list:
-        _check_card_dict(cd, 'pickup', seen)
+        _check_card_dict(cd, 'pickup', card_loc)
 
     pile_discard_list = d.get('pile_discard', [])
     if not isinstance(pile_discard_list, list):
         raise GameStateError("'pile_discard' must be a list in snapshot")
     for cd in pile_discard_list:
-        _check_card_dict(cd, 'discard', seen)
+        _check_card_dict(cd, 'discard', card_loc)
 
-    table_obj = d.get('table', {})
-    if not isinstance(table_obj, dict):
-        raise GameStateError("'table' must be a dict in snapshot")
-    for k, v in table_obj.items():
-        if not isinstance(v, list):
-            raise GameStateError("table entry must be a list of card dicts")
-        for cd in v:
-            _check_card_dict(cd, 'table', seen)
+    plays_obj = d.get('plays')
+    if plays_obj is None:
+        raise GameStateError("'plays' must be provided as a list in snapshot")
+    if not isinstance(plays_obj, list):
+        raise GameStateError("'plays' must be a list in snapshot")
+    for pd in plays_obj:
+        if not isinstance(pd, dict):
+            raise GameStateError("play entry must be a dict")
+        cards = pd.get('cards', [])
+        if not isinstance(cards, list):
+            raise GameStateError("play 'cards' must be a list of card dicts")
+        for cd in cards:
+            _check_card_dict(cd, 'table', card_loc)

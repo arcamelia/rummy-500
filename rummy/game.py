@@ -4,7 +4,8 @@ from .utils import str_list, format_list_of_str
 import random
 import itertools
 from typing import overload
-from .errors.exceptions import DuplicateIDError, GameStateError
+from .errors.exceptions import DuplicateIDError, GameStateError, IllegalMoveError
+from .play import Play, PlayType
 
 MAX_PLAYERS = 7
 NUM_CARDS_PER_PLAYER = 7
@@ -32,60 +33,25 @@ class Game:
     players: list[Player]
     pile_pickup: list[Card]
     pile_discard: list[Card]
-    table: dict[str,list[Card]]
-    id_counter: int
-
-    """
-    Some notes on the table:
-
-    * key formation:
-        - prefix character of R (run) or W (wreck)
-        - for a R, the second character indicates what suit it is
-        - for a W, the second character indicates what rank it is
-        - the integer at the end indicates the order of play, and is unique to that sequence (
-            determined by `self.id_counter`)
-
-        when a player plays the 5H, it will be added to the front of RH5.
-        however, when the 9H is played, it could be placed either at the front of RH3 or the 
-        end of RH5. we will resolve this by combining the two lists together as RH3, and 
-        removing RH5 from the map (we arbitrarily choose to keep the run that was played first).
-    
-    * the list values of each entry in the dict MUST BE KEPT IN SORTED ORDER
-
-    * each player will keep track of the cards that they specifically have played, so it's not required
-      for the central table to know who played what
-
-    e.g. table = {
-        RC1: [3C, 4C, 5C],
-        WA2: [AC, AD, AS],
-        RH3: [10H, JH, QH, KH, AH],
-        RS4: [8S, 9S, 10S],
-        RH5: [6H, 7H, 8H],
-        W36: [3D, 3S, 3H]
-    }
-
-    """
+    play_id_counter: int
 
     def __init__(self, num_players):
         self.players = []
-        self._add_players(num_players)
+        self.players = self._initialize_players(num_players)
         deck: list[Card] = self._initialize_deck()
         self._deal_cards(deck, self.players)
 
         self.pile_discard = self._initialize_pile_discard(deck)
         self.pile_pickup = self._initialize_pile_pickup(deck)
+        self.play_id_counter = 0 # used for play.key generation
         
-        self.table: dict[str,list[Card]] = {}
-        self.id_counter = 0
-    
-    def run(self) -> dict[int,int]:
-        raise NotImplementedError("Game.run is UI-specific; use the engine action methods in a loop instead")
+        # plays: key = <play.id>, value = <play>
+        self.plays: dict[int, Play] = {}
+        # card_loc_dict: key = <card.id>, value = (<play.id>, <index in play.cards>)
+        self.card_loc_dict: dict[str, tuple[int,int]] = {}
 
-    def run_turn_for_player(self, player: Player) -> None:
-        raise NotImplementedError("run_turn_for_player is UI-specific; use GameConsoleAdapter for interactive play")
+#################### turn phases ####################
 
-    #################### Engine action methods (UI-agnostic) ####################
-    
     @overload
     def pickup(self, player: Player) -> Card:
         """
@@ -106,7 +72,7 @@ class Game:
             raise IndexError("Discard index out of range")
         chosen_card = self.pile_discard[idx]
 
-        if not self.legal_play_possible_with(player.hand, chosen_card):
+        if not self.legal_play_with(player.hand, chosen_card):
             raise ValueError(f"Chosen card {chosen_card} cannot be used immediately")
 
         add_to_hand = self.pile_discard[idx+1:]
@@ -139,13 +105,15 @@ class Game:
         self.pile_discard.append(card)
         return card
 
+#################### rummy checking logic ####################
+
     def check_rummy(self, cards: list[Card]) -> bool:
         """
         Return true if the given cards are in the discard pile and are involved in a rummy.
         """
-        return {c in self.pile_discard for c in cards} and self.legal_play_any(cards)
+        return {c in self.pile_discard for c in cards} and self.legal_play(cards)
 
-    def legal_play_spec(self, cards: list[Card], type_of_play: str) -> bool:
+    def legal_play(self, cards: list[Card], type_of_play: str = None) -> bool:
         """
         Return `True` if given list of cards can form a legal play based on the specified type (could be a 
         *R* [`type_of_play="R"`] or a *W* [`type_of_play="W"`]).
@@ -161,6 +129,10 @@ class Game:
         will return `False`, as these two plays should be made separately (even though the two
         plays are legal on their own).
         """
+        # if no type_of_play is specified, check if it's legal as either a run or a wreck
+        if not type_of_play: return self.legal_play(cards, "R") or self.legal_play(cards, "W")
+
+        # type_of_play is specified, proceed as usual
         if len(cards) < 3: return self._legal_play_addon(cards, type_of_play)
 
         ranks = Card.map_to_rank(cards)
@@ -178,23 +150,17 @@ class Game:
 
         return same_suit and consecutive_rank and type_of_play == "R"
 
-    def legal_play_any(self, cards: list[Card]) -> bool:
-        """
-        Return true if given cards can be played legally as a run OR a wreck.
-        """
-        return self.legal_play_spec(cards, "R") or self.legal_play_spec(cards, "W")
-
-    def legal_play_possible_with(self, aux: list[Card], required_card: Card) -> bool:
+    def legal_play_with(self, aux: list[Card], required_card: Card) -> bool:
         """
         Return `True` if `required_card` can be legally played in conjunction with 0 or 
         more of the cards contained in `aux` (the auxiliary card list).
         """
-        if self.legal_play_any([required_card]):
+        if self.legal_play([required_card]):
             return True
         for num_extra_cards in range(4):
             for subset in itertools.combinations(aux, num_extra_cards):
-                candidate = [required_card] + list(subset)
-                if self.legal_play_any(candidate):
+                candidate_play = [required_card] + list(subset)
+                if self.legal_play(candidate_play):
                     return True
         return False
 
@@ -208,175 +174,160 @@ class Game:
         match len(cards):
             case 1:
                 return (
-                    self._legal_one_card_play_r(cards[0]) and type_of_play == "R"
+                    self._legal_play_one_card_r(cards[0]) and type_of_play == "R"
                 ) or (
-                    self._legal_one_card_play_w(cards[0]) and type_of_play == "W"
+                    self._legal_play_one_card_w(cards[0]) and type_of_play == "W"
                 )
             case 2:
                 if type_of_play != "R": return False
                 c1: Card = cards[0]
                 c2: Card = cards[1]
-                one_card_legal = self._legal_one_card_play_r(c1) or self._legal_one_card_play_r(c2)
+                one_card_legal = self._legal_play_one_card_r(c1) or self._legal_play_one_card_r(c2)
                 return one_card_legal and Card.same_suit(c1, c2) and Card.consecutive_rank(c1, c2)
             case _:
                 return False
 
-    def _legal_one_card_play_r(self, card: Card) -> bool:
+    def _legal_play_one_card_r(self, c: Card) -> bool:
         """
         Return true if given card can be played on an existing *R*.
         """
-        key_to_find = "R" + str(card.suit)
-        potentials: dict[str,list[Card]] = {}
-        for k, v in self.table.items():
-            if k.startswith(key_to_find): potentials[k] = v
-        for v in potentials.values():
-            consecutive_low_no_ace = Card.consecutive_rank(card, v[0]) and v[0].rank != Rank.ACE
-            consecutive_high_no_ace = Card.consecutive_rank(card, v[-1]) and v[-1].rank != Rank.ACE
+        # Look through plays of type 'R' with matching suit
+        for play in self.plays.values():
+            if play.type != 'R': continue
+            if str(c.suit) != play.key: continue # TODO: key isn't just suit??
+            cards = play.cards
+            if not cards: continue
+            consecutive_low_no_ace = Card.consecutive_rank(c, cards[0]) and cards[0].rank != Rank.ACE
+            consecutive_high_no_ace = Card.consecutive_rank(c, cards[-1]) and cards[-1].rank != Rank.ACE
             if consecutive_low_no_ace or consecutive_high_no_ace: return True
         return False
 
-    def _legal_one_card_play_w(self, card: Card) -> bool:
+    def _legal_play_one_card_w(self, card: Card) -> bool:
         """
         Return true if given card can be played on an existing *W*.
         """
-        key_to_find = "W" + str(card.rank)
-        for k in self.table.keys():
-            if k.startswith(key_to_find): return True
+        # Look for plays of type 'W' matching the rank
+        for play in self.plays.values():
+            if play.type == 'W' and play.key == str(card.rank): # TODO: what is key???
+                return True
         return False
 
-    def _try_play(self, player: Player, cards: list[Card], type_of_play: str) -> bool:
+#################### play phase helpers ####################
+
+    def _try_play(self, player: Player, cards: list[Card], play_type: PlayType) -> bool:
         """
         Return `True` if given cards form a legal play, and are properly added to the table 
         & removed from given player's hand.
         """
-        if not self.legal_play_spec(cards, type_of_play):
+        if not self.legal_play(cards, play_type):
             return False
-        self._play_cards(player, cards, type_of_play)
+        self._play_cards(player, cards, play_type)
         return True
 
-    def _play_cards(self, player: Player, cards: list[Card], type_of_play: str) -> None:
+    def _play_cards(self, player: Player, cards: list[Card], play_type: PlayType) -> None:
         """
         Encompasses all behaviour that occurs when a player moves 1 or more cards 
         from their hand onto the table as points.
 
-        Return `True` if cards are successfully played.
-
-        **CONSTRAINT**: `type_of_play = "R" | "W"`, cards have already been tested for validity
+        **CONSTRAINT**: cards have already been tested for validity
         """
-        player.move_cards_to_played(cards)
-        play_key = self._find_play_match(cards, type_of_play)
-        if play_key == None:
-            new_key = self._create_key(cards, type_of_play)
-            self.table[new_key] = cards
+        key = self._find_play_match(cards, play_type)
+
+        if key is None:
+            # start a new play on the table
+            p_id = self._generate_play_id()
+            p_key = self._generate_play_key(cards, play_type)
+            new_play = Play(p_id, play_type, p_key, cards)
+            key = self._key_for_plays_dict(new_play)
+            self.plays[key] = new_play
+
         else:
-            old_play_list = self.table[play_key]
-            self.table[play_key] = Card.sort_by_suit_and_rank(old_play_list + cards)
+            # update existing play and card_loc_dict
+            self.plays[key].cards = Card.sort_by_suit_and_rank(self.plays[key].cards + cards)
+        
+        # update card_loc_dict
+        for idx, c in enumerate(self.plays[key].cards):
+            self.card_loc_dict[c.id] = (key, idx)
+
         self._clean_up_table()
+        player.move_cards_to_played(cards)
 
     def _find_play_match(self, cards: list[Card], type_of_play: str) -> str | None:
         """
-        Find a list of cards on the table, if one exists, that param cards can be added to. 
-        Return the key of matching list if successful, otherwise return `None`.
+        Find a Play in the Game, if one exists, that param cards can be added to. 
+        Return the key of matching play if successful, otherwise return `None`.
 
         Arbitrarily return the first play match found if more than one exists.
         """
-        filtered_table = { k: v for k, v in self.table.items() if k.startswith(type_of_play) }
-        for k, v in filtered_table.items():
-            if self._cards_can_be_joined(v, cards, type_of_play):
-                return k
+        for play in self.plays.values():
+            if play.type != type_of_play:
+                continue
+            if play.is_legal_merge(cards):
+                return self._key_for_plays_dict(play)
         return None
-
-    def _cards_can_be_joined(self, cards_1: list[Card], cards_2: list[Card], type_of_play: str) -> bool:
-        """
-        Return `True` if two lists of cards can be joined, based on the `type_of_play`.
-
-        **CONSTRAINT**: neither list can be empty, one of the lists must contain at least 3 cards
-        """
-        if type_of_play == "W":
-            return cards_1[0].rank == cards_2[0].rank
-        if cards_1[0].suit != cards_2[0].suit:
-            return False
-        high_ace = self._high_ace(cards_1) or self._high_ace(cards_2) or self._high_ace(cards_1 + cards_2)
-        amalgamated_cards = Card.sort_by_suit_and_rank(cards_1 + cards_2, high_ace)
-        counter = amalgamated_cards[0].rank_value
-        for c in amalgamated_cards:
-            if c.rank_value != counter:
-                if counter == 14 and c.rank == Rank.ACE:
-                    continue
-                else:
-                    return False
-            counter += 1
-        return True
 
     def _clean_up_table(self):
         """
-        Join any runs together in `self.table` that are connected.
-        """
-        to_rmv = []
-        for k1, v1 in self.table.items():
-            for k2, v2 in self.table.items():
-                if k1.startswith("R") and k2.startswith("R") and k1 != k2:
-                    if self._cards_can_be_joined(v1, v2, "R"):
-                        self.table[k1] = Card.sort_by_suit_and_rank(v1 + v2)
-                        to_rmv.append(k2)
-        for k in to_rmv:
-            self.table.pop(k)
-    
-    def _high_ace(self, cards: list[Card]):
-        """
-        Return `True` if there is an ace in the list of cards that should be represented 
-        as a high card (a rank value of 14 instead of the default 1).
+        Merge any runs in `self.plays` that are connected.
 
-        - If there is only one card in the list and it is an ace, `False` will be returned.
-        - If all 13 cards from the suit are in the list, `False` will be returned.
-
-        **CONSTRAINT**: This method should only be called on a list of cards of the same 
-        suit. The method will not validate this constraint is upheld.
+        Arbitrarily remove the second play after merging those cards into the first.
         """
-        if len(cards) == 13 or len(cards) == 1:
+        to_remove = []
+        play_ids = list(self.plays.keys())
+        num_plays = len(play_ids)
+
+        for i in range(num_plays):
+            pid1 = play_ids[i]
+            p1 = self.plays.get(pid1)
+            if not p1 or p1.type == PlayType.WRECK: continue
+
+            for j in range(i+1, num_plays):
+                pid2 = play_ids[j]
+                p2 = self.plays.get(pid2)
+                if not p2 or p2.type == PlayType.WRECK: continue
+
+                if self._try_merge_plays(p1, p2):
+                    to_remove.append(pid2)
+
+        for pid in to_remove:
+            self.plays.pop(pid, None)
+
+    def _try_merge_plays(self, p1: Play, p2: Play) -> bool:
+        """
+        Attempt to merge two plays together. Return `True` if they can be / are successfully merged.
+        """
+        try:
+            p1.merge(p2.cards)
+        except IllegalMoveError:
             return False
-        ranks = { c.rank for c in cards }
-        return Rank.ACE in ranks and Rank.KING in ranks
 
-    def _create_key(self, cards: list[Card], type_of_play: str) -> str:
-        """
-        Return a new, unique key for given list of cards to be played on the table.
+        for idx, card in enumerate(p1.cards):
+            self.card_loc_dict[card.id] = (p1.id, idx)
+        return True
 
-        key formation:
-        - prefix character of R (run) or W (wreck)
-        - for a R, the second character indicates what suit it is
-        - for a W, the second character indicates what rank it is
-        - the integer at the end indicates the order of play, and is unique to that sequence 
-        (note though, that the integers are not necessarily consecutive)
-            - e.g., RH8 was started after W35, but there need not be keys XX6, XX7 in between 
-            (which could occur if runs were joined)
+    def _key_for_plays_dict(self, play: Play) -> str:
         """
-        self.id_counter += 1
-        if type_of_play == "R":
-            suit_rank_id = str(cards[0].suit)
-        else:
-            suit_rank_id = str(cards[0].rank)
-        return type_of_play + suit_rank_id + str(self.id_counter)
+        Return the key in `self.plays` for given play.
+        """
+        return str(play)
 
-    def tally_scores(self) -> dict[int,int]:
+    def _generate_play_id(self) -> str:
         """
-        Count up each player's points for the current round and return them in a dict.
+        Return a unique id for new play to be made.
         """
-        scores = {}
-        for p in self.players:
-            cards_played = p.played_cards
-            score = self._sum_points(list(cards_played))
-            scores[p.id] = score
-        return scores
+        self.play_id_counter += 1
+        return self.play_id_counter
 
-    def _sum_points(self, cards: list[Card]) -> int:
-        """
-        Return the total point value of all the cards in given list.
-        """
-        score = 0
-        for c in cards:
-            score += CARD_POINT_VALUES[c.rank]
-        return score
+    def _generate_play_key(self, cards: list[Card], play_type: PlayType) -> str:
+            """
+            Return the proper key for a play defined by given cards and play type.
+            """
+            if play_type == PlayType.RUN:
+                return str(cards[0].suit)
+            else:
+                return str(cards[0].rank)
+
+#################### pre-amble ####################
 
     def _initialize_deck(self) -> list[Card]:
         """
@@ -416,49 +367,79 @@ class Game:
             card.update(CardStatus.PILE_PICKUP)
         return deck
 
-    def _add_players(self, num_players: int) -> None:
+    def _initialize_players(self, num_players: int) -> list[Player]:
         """
         Create and add the given number of players to the game (all with unique id).
         """
+        players = []
         if num_players > MAX_PLAYERS:
             raise ValueError(f"Maximum number of players is {MAX_PLAYERS}")
         for p in range(num_players):
-            self.players.append(Player(p+1))
+            players.append(Player(p+1))
+        return players
 
-    def __str__(self) -> str:
-        players = "\n\t".join(str_list(self.players))
-        players = "\t" + players
-        return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.pile_discard)}\npickup pile: {format_list_of_str(self.pile_pickup)}"
+#################### post-amble ####################
 
-    def stringify_table(self) -> str:
+    def tally_scores(self) -> dict[int,int]:
         """
-        Return a string representation of `self.table`.
+        Count up each player's points for the current round and return them in a dict.
         """
-        s = "{\n"
-        for key, value in self.table.items():
-            s += '\t' + str(key) + ": "
-            s += format_list_of_str(str_list(value))
-            s += "\n"
-        s += "}"
-        return s
+        scores = {}
+        for p in self.players:
+            cards_played = p.played_cards
+            score = self._sum_points(list(cards_played))
+            scores[p.id] = score
+        return scores
+
+    def _sum_points(self, cards: list[Card]) -> int:
+        """
+        Return the total point value of all the cards in given list.
+        """
+        score = 0
+        for c in cards:
+            score += CARD_POINT_VALUES[c.rank]
+        return score
+
+#################### utils ####################
 
     def to_dict(self) -> dict:
         """
-        TODO: `to_dict` docstring
+        Serialize the full `Game` state to a dict suitable for persistence or
+        transport.
+
+        Returned structure:
+          - `players`: list of player dicts (each from `Player.to_dict()`)
+          - `pile_pickup`: list of pickup pile card dicts
+          - `pile_discard`: list of discard pile card dicts
+          - `plays`: canonical list of plays (each from `Play.to_dict()`)
+          - `id_counter`: integer play id counter for future play generation
+
+        Note: In-memory `self.plays` uses observable keys of `str(play)` for
+        human-friendly debugging and display; the serialized form is a plain
+        list of play dicts so that callers need not rely on in-memory dict keys.
         """
         players_list = sorted(self.players, key=lambda p: p.id)
         return {
             'players': [p.to_dict() for p in players_list],
             'pile_pickup': [c.to_dict() for c in self.pile_pickup],
             'pile_discard': [c.to_dict() for c in self.pile_discard],
-            'table': {k: [c.to_dict() for c in v] for k, v in self.table.items()},
-            'id_counter': self.id_counter
+            'plays': [pl.to_dict() for pl in sorted(self.plays.values(), key=lambda x: x.id)],
+            'id_counter': self.play_id_counter
         }
 
     @staticmethod
     def from_dict(d: dict) -> 'Game':
         """
-        TODO: `from_dict` docstring
+        Reconstruct a `Game` from a dict previously produced by `to_dict()`.
+
+        This method performs structural checks on the input and will raise
+        `ValueError` for malformed types. When rebuilding `Play` objects from
+        the serialized `plays` list we pass `validate=False` to `Play.__init__`:
+        deserialization must be able to recreate the raw object graph even when
+        some plays are temporarily incomplete; full consistency is checked
+        afterwards by duplicate/id and status validation. The in-memory
+        `self.plays` mapping uses keys equal to `str(play)` (for observability),
+        while each `Play.id` remains the numeric identifier used in the game.
         """
         if not isinstance(d, dict):
             raise ValueError("Game.from_dict expects a dict")
@@ -478,11 +459,40 @@ class Game:
         if not isinstance(pile_discard_list, list):
             raise ValueError("Game.from_dict: 'pile_discard' must be a list")
         g.pile_discard = [Card.from_dict(cd) for cd in pile_discard_list]
-        table_obj = d.get('table', {})
-        if not isinstance(table_obj, dict):
-            raise ValueError("Game.from_dict: 'table' must be a dict")
-        g.table = {k: [Card.from_dict(cd) for cd in v] for k, v in table_obj.items()}
-        g.id_counter = d.get('id_counter', 0)
+        # Expect serialized `plays` list (canonical). Legacy 'table' support removed.
+        plays_obj = d.get('plays')
+        if plays_obj is None:
+            raise ValueError("Game.from_dict: 'plays' must be provided as a list")
+        if not isinstance(plays_obj, list):
+            raise ValueError("Game.from_dict: 'plays' must be a list")
+        g.plays = {}
+        g.card_loc_dict = {}
+        for pd in plays_obj:
+            if not isinstance(pd, dict):
+                raise ValueError("each play must be a dict in 'plays'")
+            pid = pd.get('play_id')
+            typ_val = pd.get('type')
+            # accept either PlayType value ('R'/'W') or PlayType member
+            if isinstance(typ_val, str):
+                try:
+                    typ = PlayType(typ_val)
+                except Exception:
+                    raise ValueError(f"invalid play type: {typ_val}")
+            elif isinstance(typ_val, PlayType):
+                typ = typ_val
+            else:
+                raise ValueError("play 'type' must be a string or PlayType")
+
+            key_field = pd.get('key')
+            cards_list = [Card.from_dict(cd) for cd in pd.get('cards', [])]
+            play = Play(id=pid, type=typ, key=key_field, cards=list(cards_list), validate=False)
+            # store plays under `str(play)` keys in-memory for observability
+            play_key = g._key_for_plays_dict(play)
+            g.plays[play_key] = play
+            for idx, c in enumerate(cards_list):
+                # card_loc_dict maps to (play.id, index_in_play)
+                g.card_loc_dict[c.id] = (play.id, idx)
+        g.play_id_counter = d.get('id_counter', 0)
         seen = set()
         def check_and_add(card: Card):
             cid = card.id
@@ -498,8 +508,8 @@ class Game:
             check_and_add(c)
         for c in g.pile_discard:
             check_and_add(c)
-        for k, v in g.table.items():
-            for c in v:
+        for play in g.plays.values():
+            for c in play.cards:
                 check_and_add(c)
         return g
 
@@ -544,8 +554,26 @@ class Game:
             check_card_location(c, 'pickup')
         for c in self.pile_discard:
             check_card_location(c, 'discard')
-
-        for k, v in self.table.items():
-            for c in v:
+        # validate table/play cards
+        for play in self.plays.values():
+            for c in play.cards:
                 check_card_location(c, 'table')
+
+    def __str__(self) -> str:
+        players = "\n\t".join(str_list(self.players))
+        players = "\t" + players
+        return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.pile_discard)}\npickup pile: {format_list_of_str(self.pile_pickup)}"
+
+    def stringify_table(self) -> str:
+        """
+        Return a string representation of `self.table`.
+        """
+        s = "{\n"
+        for play in self.plays.values():
+            key = self._key_for_plays_dict(play)
+            s += '\t' + str(play) + ": "
+            s += format_list_of_str(str_list(play.cards))
+            s += "\n"
+        s += "}"
+        return s
 

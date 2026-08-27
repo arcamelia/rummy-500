@@ -44,15 +44,15 @@ def test_game_from_dict_invalid_inputs():
 
     # players not a list
     with pytest.raises(ValueError):
-        Game.from_dict({'players': 'nope', 'pile_pickup': [], 'pile_discard': [], 'table': {}})
+        Game.from_dict({'players': 'nope', 'pile_pickup': [], 'pile_discard': [], 'plays': []})
 
     # pile_pickup not a list
     with pytest.raises(ValueError):
-        Game.from_dict({'players': [], 'pile_pickup': 'bad', 'pile_discard': [], 'table': {}})
+        Game.from_dict({'players': [], 'pile_pickup': 'bad', 'pile_discard': [], 'plays': []})
 
-    # table not a dict
+    # plays not a list
     with pytest.raises(ValueError):
-        Game.from_dict({'players': [], 'pile_pickup': [], 'pile_discard': [], 'table': []})
+        Game.from_dict({'players': [], 'pile_pickup': [], 'pile_discard': [], 'plays': {}})
 
 
 def test_card_update_enforces_player_when_needed():

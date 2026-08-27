@@ -13,6 +13,22 @@ A small engine for the Rummy 500 card game with serialization and a CLI adapter.
 - Create a card: `Card(Suit.HEARTS, Rank.ACE)` — it will receive a generated `card_id`.
 - Serialize: call `to_dict()` on `Card`, `Player`, or `Game`.
 - Deserialize: call `Card.from_dict(d)` (the dictionary must include a string `card_id`).
+ - Serialized game format: `Game.to_dict()` now emits a canonical `plays` list rather than
+	 the older `table` mapping. Each play is a dict with `play_id`, `type`, `key`, and `cards`.
+	 Example:
+	 ```json
+	 {
+		 "players": [...],
+		 "pile_pickup": [...],
+		 "pile_discard": [...],
+		 "plays": [
+			 {"play_id": 1, "type": "R", "key": "HEARTS", "cards": [ ... ]},
+			 {"play_id": 2, "type": "W", "key": "THREE", "cards": [ ... ]}
+		 ]
+	 }
+	 ```
+ - Note: `Game.from_dict()` now requires `plays` to be present. Legacy `table`-based input
+	 is no longer accepted.
 Export: `json.dumps(game.to_dict())`
 Import: `game = Game.from_dict(json.loads(s))`
 
