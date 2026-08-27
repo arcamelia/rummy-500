@@ -307,7 +307,7 @@ class Game:
 
     def _key_for_plays_dict(self, play: Play) -> str:
         """
-        Return the key in `self.plays` for given play.
+        Map a play to its key in `self.plays`.
         """
         return str(play)
 
@@ -432,14 +432,10 @@ class Game:
         """
         Reconstruct a `Game` from a dict previously produced by `to_dict()`.
 
-        This method performs structural checks on the input and will raise
-        `ValueError` for malformed types. When rebuilding `Play` objects from
-        the serialized `plays` list we pass `validate=False` to `Play.__init__`:
-        deserialization must be able to recreate the raw object graph even when
-        some plays are temporarily incomplete; full consistency is checked
-        afterwards by duplicate/id and status validation. The in-memory
-        `self.plays` mapping uses keys equal to `str(play)` (for observability),
-        while each `Play.id` remains the numeric identifier used in the game.
+        This method validates the outer schema and rebuilds players, piles, and
+        plays from the serialized payload. The in-memory `self.plays` mapping uses
+        keys equal to `str(play)` for observability, while each `Play.id` remains
+        the numeric identifier used in the game.
         """
         if not isinstance(d, dict):
             raise ValueError("Game.from_dict expects a dict")
@@ -485,10 +481,9 @@ class Game:
 
             key_field = pd.get('key')
             cards_list = [Card.from_dict(cd) for cd in pd.get('cards', [])]
-            play = Play(id=pid, type=typ, key=key_field, cards=list(cards_list), validate=False)
-            # store plays under `str(play)` keys in-memory for observability
-            play_key = g._key_for_plays_dict(play)
-            g.plays[play_key] = play
+            play = Play(id=pid, type=typ, key=key_field, cards=list(cards_list))
+            key = g._key_for_plays_dict(play)
+            g.plays[key] = play
             for idx, c in enumerate(cards_list):
                 # card_loc_dict maps to (play.id, index_in_play)
                 g.card_loc_dict[c.id] = (play.id, idx)
@@ -564,13 +559,12 @@ class Game:
         players = "\t" + players
         return f"players:\n{players}\ndiscard pile: {format_list_of_str(self.pile_discard)}\npickup pile: {format_list_of_str(self.pile_pickup)}"
 
-    def stringify_table(self) -> str:
+    def stringify_plays(self) -> str:
         """
-        Return a string representation of `self.table`.
+        Return a string representation of `self.plays`.
         """
         s = "{\n"
         for play in self.plays.values():
-            key = self._key_for_plays_dict(play)
             s += '\t' + str(play) + ": "
             s += format_list_of_str(str_list(play.cards))
             s += "\n"

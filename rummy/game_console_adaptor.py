@@ -79,7 +79,7 @@ class GameConsoleAdapter:
             if success:
                 reqd_card = None
                 print("Play successful.")
-                print("Updated table:\n", self.game.stringify_table())
+                print("Updated table:\n", self.game.stringify_plays())
             else:
                 print("Invalid play. Try again.")
                 continue

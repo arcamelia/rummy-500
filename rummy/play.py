@@ -26,21 +26,11 @@ class Play:
     key: str # metadata used to identify what the play groups by (suit for RUN, rank for WRECK)
     cards: List[Card] # the cards that form the play (ordered), must be >= 3 elts
 
-    def __init__(self, id: int, type: 'PlayType', key: str, cards: List[Card], validate: bool = True):
+    def __init__(self, id: int, type: 'PlayType', key: str, cards: List[Card]):
             self._id = id
             self._type = type
             self._key = key
-            # `validate` controls whether to enforce the invariant that a newly-created
-            # play must contain at least 3 cards. In normal runtime codepaths (e.g.
-            # `Game._play_cards`) this should remain `True` so that illegal plays are
-            # rejected immediately. However when reconstructing a `Game` from a
-            # serialized snapshot we sometimes need to instantiate `Play` objects for
-            # intermediate or historical states that may be incomplete (for example,
-            # tests or import tools may craft plays with < 3 cards). Passing
-            # `validate=False` during deserialization lets the loader rebuild the
-            # object graph first and then run holistic validation (see
-            # `Game.from_dict` / `Game.validate`) once all pieces are present.
-            if validate and len(cards) < 3:
+            if len(cards) < 3:
                 raise IllegalMoveError("A new play must contain at least 3 cards")
             self._cards = Card.sort_by_suit_and_rank(cards)
 
@@ -120,13 +110,13 @@ class Play:
         return str(self.type.value) + self.key + str(self.id)
 
     def to_dict(self) -> dict:
-                """
-                Serialize this Play to a plain dict suitable for inclusion in `Game.to_dict()`.
+        """
+        Serialize this Play to a plain dict suitable for inclusion in `Game.to_dict()`.
 
-                Format:
-                    - `play_id`: integer id of the Play (`Play.id`)
-                    - `type`: one-character play type (`'R'` or `'W'`)
-                    - `key`: play grouping key (suit for runs, rank for wrecks)
-                    - `cards`: list of card dicts as produced by `Card.to_dict()`
-                """
-                return {'play_id': self.id, 'type': self.type.value, 'key': self.key, 'cards': [c.to_dict() for c in self.cards]}
+        Format:
+          - `play_id`: integer id of the Play (`Play.id`)
+          - `type`: one-character play type (`'R'` or `'W'`)
+          - `key`: play grouping key (suit for runs, rank for wrecks)
+          - `cards`: list of card dicts as produced by `Card.to_dict()`
+        """
+        return {'play_id': self.id, 'type': self.type.value, 'key': self.key, 'cards': [c.to_dict() for c in self.cards]}

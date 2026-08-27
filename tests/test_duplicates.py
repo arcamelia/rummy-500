@@ -33,10 +33,11 @@ def test_duplicate_between_player_hand_and_table():
     if not gd['players']:
         pytest.skip("no players to test with")
     if not gd.get('plays'):
-        # create a play entry by duplicating a pickup card into plays
-        if not gd['pile_pickup']:
-            pytest.skip("no cards to craft play entry")
-        gd['plays'] = [{'play_id': 1, 'type': 'R', 'key': 'X', 'cards': [dict(gd['pile_pickup'][0])]}]
+        # create a valid play entry by reusing pickup cards; duplicate detection should
+        # trigger only after the object graph is built, not at Play construction time.
+        if len(gd['pile_pickup']) < 3:
+            pytest.skip("not enough cards to craft a valid play entry")
+        gd['plays'] = [{'play_id': 1, 'type': 'R', 'key': 'X', 'cards': [dict(c) for c in gd['pile_pickup'][:3]]}]
 
     # pick a card from player 0's hand (or pickup if empty)
     source_list = gd['players'][0]['hand'] if gd['players'][0]['hand'] else gd['pile_pickup']
@@ -58,11 +59,11 @@ def test_duplicate_across_table_entries():
     # ensure at least two table entries exist; if not, craft them from pickup cards
     plays = gd.get('plays', [])
     if len(plays) < 2:
-        if len(gd.get('pile_pickup', [])) < 2:
-            pytest.skip("not enough cards to craft play entries")
+        if len(gd.get('pile_pickup', [])) < 6:
+            pytest.skip("not enough cards to craft valid play entries")
         gd['plays'] = [
-            {'play_id': 1, 'type': 'R', 'key': 'X', 'cards': [dict(gd['pile_pickup'][0])]},
-            {'play_id': 2, 'type': 'R', 'key': 'Y', 'cards': [dict(gd['pile_pickup'][1])]}
+            {'play_id': 1, 'type': 'R', 'key': 'X', 'cards': [dict(c) for c in gd['pile_pickup'][:3]]},
+            {'play_id': 2, 'type': 'R', 'key': 'Y', 'cards': [dict(c) for c in gd['pile_pickup'][3:6]]}
         ]
         plays = gd['plays']
 
